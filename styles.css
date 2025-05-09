@@ -51,12 +51,22 @@
 }
 
 .hidden {
-    display: none;
+    display: none !important;
 }
 
 #historialContainer {
     margin-top: 20px;
     transition: all 0.3s ease;
+}
+
+#historialTareas {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.list-group-item {
+    margin-bottom: 10px;
+    border-radius: 5px !important;
 }
 
 #historialContainer.visible {

@@ -278,14 +278,22 @@ function mostrarMensaje(texto) {
 }
 
 // Toggle del historial
-toggleHistorialBtn.addEventListener('click', () => {
-    const estaOculto = historialContainer.classList.contains('hidden');
-    if (estaOculto) {
-        historialContainer.classList.remove('hidden');
-        toggleHistorialBtn.textContent = 'Ocultar Historial';
-    } else {
+toggleHistorialBtn.addEventListener('click', function() {
+    const historialContainer = document.getElementById('historialContainer');
+    historialContainer.classList.toggle('hidden');
+    this.textContent = historialContainer.classList.contains('hidden') ? 'Mostrar Historial' : 'Ocultar Historial';
+    
+    if (!historialContainer.classList.contains('hidden')) {
+        mostrarTareas(); // Actualiza el historial cuando se muestra
+    }
+});
+
+// Asegurarse de que el código se ejecute cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar el historial oculto
+    const historialContainer = document.getElementById('historialContainer');
+    if (historialContainer) {
         historialContainer.classList.add('hidden');
-        toggleHistorialBtn.textContent = 'Mostrar Historial';
     }
 });
 
