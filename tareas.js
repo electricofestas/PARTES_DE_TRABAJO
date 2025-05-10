@@ -4,44 +4,42 @@ const toggleHistorialBtn = document.getElementById('toggleHistorial');
 const historialContainer = document.getElementById('historialContainer');
 const historialTareas = document.getElementById('historialTareas');
 const inputSala = document.getElementById('titulo');
+const salasList = document.getElementById('salasList');
 let tareaEditandoId = null;
 
 // Función para cargar las salas guardadas
 function cargarSalas() {
     try {
         const salasGuardadas = JSON.parse(localStorage.getItem('salas')) || [];
-        const selectSala = document.getElementById('titulo');
-        
-        // Mantener solo las opciones por defecto
-        selectSala.innerHTML = `
-            <option value="">Seleccione una sala</option>
-            ${salasGuardadas.map(sala => `<option value="${sala}">${sala}</option>`).join('')}
-            <option value="nueva_sala">+ Agregar nueva sala</option>
-        `;
+        salasList.innerHTML = salasGuardadas
+            .map(sala => `<option value="${sala}">`)
+            .join('');
     } catch (error) {
         console.error('Error al cargar las salas:', error);
         mostrarMensaje('Error al cargar las salas guardadas');
     }
 }
 
-// Evento para manejar la selección de nueva sala
-document.getElementById('titulo').addEventListener('change', function(e) {
-    if (e.target.value === 'nueva_sala') {
-        const nuevaSala = prompt('Ingrese el nombre de la nueva sala:');
-        if (nuevaSala && nuevaSala.trim()) {
-            // Guardar la nueva sala
-            const salasGuardadas = JSON.parse(localStorage.getItem('salas')) || [];
-            if (!salasGuardadas.includes(nuevaSala)) {
-                salasGuardadas.push(nuevaSala);
-                localStorage.setItem('salas', JSON.stringify(salasGuardadas));
-                
-                // Recargar las salas y seleccionar la nueva
-                cargarSalas();
-                e.target.value = nuevaSala;
-            }
-        } else {
-            e.target.value = ''; // Resetear a la opción por defecto si se cancela
+// Función para guardar una nueva sala
+function guardarNuevaSala(sala) {
+    try {
+        const salasGuardadas = JSON.parse(localStorage.getItem('salas')) || [];
+        if (!salasGuardadas.includes(sala)) {
+            salasGuardadas.push(sala);
+            localStorage.setItem('salas', JSON.stringify(salasGuardadas));
+            cargarSalas();
         }
+    } catch (error) {
+        console.error('Error al guardar la sala:', error);
+        mostrarMensaje('Error al guardar la nueva sala');
+    }
+}
+
+// Evento para guardar nueva sala cuando se pierde el foco
+inputSala.addEventListener('blur', function() {
+    const valor = this.value.trim();
+    if (valor) {
+        guardarNuevaSala(valor);
     }
 });
 
@@ -271,21 +269,25 @@ function mostrarMensaje(texto) {
     }, 2000);
 }
 
-// Toggle del historial
-toggleHistorialBtn.addEventListener('click', function() {
-    const historialContainer = document.getElementById('historialContainer');
-    historialContainer.classList.toggle('hidden');
-    this.textContent = historialContainer.classList.contains('hidden') ? 'Mostrar Historial' : 'Ocultar Historial';
-    
-    if (!historialContainer.classList.contains('hidden')) {
-        mostrarTareas(); // Actualiza el historial cuando se muestra
+// Función para mostrar/ocultar el historial
+function toggleHistorial() {
+    if (historialContainer.classList.contains('hidden')) {
+        historialContainer.classList.remove('hidden');
+        toggleHistorialBtn.textContent = 'Ocultar Historial';
+        mostrarTareas();
+    } else {
+        historialContainer.classList.add('hidden');
+        toggleHistorialBtn.textContent = 'Mostrar Historial';
     }
-});
+}
 
-// Asegurarse de que el código se ejecute cuando el DOM esté listo
+// Evento para el botón de mostrar/ocultar historial
+toggleHistorialBtn.addEventListener('click', toggleHistorial);
+
+// Cargar salas al iniciar la página
 document.addEventListener('DOMContentLoaded', function() {
+    cargarSalas();
     // Inicializar el historial oculto
-    const historialContainer = document.getElementById('historialContainer');
     if (historialContainer) {
         historialContainer.classList.add('hidden');
     }
@@ -760,14 +762,22 @@ tareaForm.addEventListener('submit', async (e) => {
     
     // ... existing code ...
 });
-document.getElementById('mostrarHistorial').addEventListener('click', function() {
-    // Lógica para mostrar el historial
+// Función para alternar la visibilidad del historial
+function toggleHistorial() {
     const historialContainer = document.getElementById('historialContainer');
-    if (historialContainer) {
-        historialContainer.classList.toggle('hidden');
+    const toggleHistorialBtn = document.getElementById('toggleHistorial');
+    
+    if (historialContainer.classList.contains('hidden')) {
+        historialContainer.classList.remove('hidden');
+        toggleHistorialBtn.textContent = 'Ocultar Historial';
+    } else {
+        historialContainer.classList.add('hidden');
+        toggleHistorialBtn.textContent = 'Mostrar Historial';
     }
-    mostrarTareas();
-});
+}
+
+// Agregar el evento click al botón
+document.getElementById('toggleHistorial').addEventListener('click', toggleHistorial);
 
 document.getElementById('generarPDF').addEventListener('click', function() {
     // Mostrar el diálogo de selección de fechas para el PDF
@@ -945,14 +955,22 @@ tareaForm.addEventListener('submit', async (e) => {
     }
     
     // ... existing code ...
-document.getElementById('mostrarHistorial').addEventListener('click', function() {
-    // Lógica para mostrar el historial
+// Función para alternar la visibilidad del historial
+function toggleHistorial() {
     const historialContainer = document.getElementById('historialContainer');
-    if (historialContainer) {
-        historialContainer.classList.toggle('hidden');
+    const toggleHistorialBtn = document.getElementById('toggleHistorial');
+    
+    if (historialContainer.classList.contains('hidden')) {
+        historialContainer.classList.remove('hidden');
+        toggleHistorialBtn.textContent = 'Ocultar Historial';
+    } else {
+        historialContainer.classList.add('hidden');
+        toggleHistorialBtn.textContent = 'Mostrar Historial';
     }
-    mostrarTareas();
-});
+}
+
+// Agregar el evento click al botón
+document.getElementById('toggleHistorial').addEventListener('click', toggleHistorial);
 
 document.getElementById('generarPDF').addEventListener('click', function() {
     // Mostrar el diálogo de selección de fechas para el PDF
