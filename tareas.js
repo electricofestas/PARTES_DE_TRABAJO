@@ -24,16 +24,6 @@ function cargarSalas() {
     }
 }
 
-// Función para guardar una nueva sala
-function guardarNuevaSala(sala) {
-    const salasGuardadas = JSON.parse(localStorage.getItem('salas')) || [];
-    if (!salasGuardadas.includes(sala)) {
-        salasGuardadas.push(sala);
-        localStorage.setItem('salas', JSON.stringify(salasGuardadas));
-        cargarSalas();
-    }
-}
-
 // Evento para manejar la selección de nueva sala
 document.getElementById('titulo').addEventListener('change', function(e) {
     if (e.target.value === 'nueva_sala') {
