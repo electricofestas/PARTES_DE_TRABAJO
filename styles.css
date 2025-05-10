@@ -1,0 +1,250 @@
+.card {
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    border: none;
+    border-radius: 8px;
+}
+
+.form-label {
+    font-weight: 500;
+    color: #333;
+}
+
+.btn {
+    padding: 8px 20px;
+    border-radius: 5px;
+}
+
+.btn-primary {
+    background-color: #0d6efd;
+    border: none;
+}
+
+.btn-primary:hover {
+    background-color: #0b5ed7;
+}
+
+.list-group-item {
+    border-left: 4px solid transparent;
+    margin-bottom: 5px;
+}
+
+.list-group-item.prioridad-alta {
+    border-left-color: #dc3545;
+}
+
+.list-group-item.prioridad-media {
+    border-left-color: #ffc107;
+}
+
+.list-group-item.prioridad-baja {
+    border-left-color: #198754;
+}
+
+#fileList {
+    max-height: 100px;
+    overflow-y: auto;
+}
+
+.task-date {
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.hidden {
+    display: none !important;
+}
+
+#historialContainer {
+    margin-top: 20px;
+    transition: all 0.3s ease;
+}
+
+#historialTareas {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.tarea-item {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    padding: 15px;
+    background-color: #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.tarea-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+}
+
+.info-principal {
+    flex-grow: 1;
+}
+
+.sala-titulo {
+    font-size: 1.2rem;
+    margin-bottom: 5px;
+    color: #333;
+}
+
+.fecha-registro,
+.horario-registro,
+.prioridad-registro {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.botones-tarea {
+    display: flex;
+    gap: 5px;
+}
+
+.btn-editar,
+.btn-eliminar {
+    border: none;
+    background: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0 5px;
+}
+
+.btn-editar {
+    color: #0d6efd;
+}
+
+.btn-eliminar {
+    color: #dc3545;
+}
+
+.trabajo-contenido {
+    margin: 10px 0;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+}
+
+.trabajo-realizado-label {
+    font-weight: 500;
+    margin-bottom: 5px;
+    color: #495057;
+}
+
+.descripcion {
+    margin: 0;
+    white-space: pre-wrap;
+}
+
+.registro-info {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin: 5px 0 0;
+}
+
+.version-info {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin: 0;
+}
+
+.prioridad-alta {
+    border-left: 4px solid #dc3545;
+}
+
+.prioridad-media {
+    border-left: 4px solid #ffc107;
+}
+
+.prioridad-baja {
+    border-left: 4px solid #198754;
+}
+
+.editando {
+    background-color: #fff3cd;
+}
+
+.mensaje-flotante {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 10px 20px;
+    background-color: #333;
+    color: white;
+    border-radius: 4px;
+    z-index: 1000;
+    animation: fadeInOut 2s ease;
+}
+
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translateY(-20px); }
+    10% { opacity: 1; transform: translateY(0); }
+    90% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-20px); }
+}
+
+.fotos-container {
+    margin-top: 15px;
+}
+
+.fotos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.foto-thumbnail {
+    aspect-ratio: 1;
+    cursor: pointer;
+    overflow: hidden;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+}
+
+.foto-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.2s;
+}
+
+.foto-thumbnail:hover img {
+    transform: scale(1.1);
+}
+
+#fechaFiltroContainer {
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-top: 15px;
+}
+
+#fechaFiltroContainer.visible {
+    display: block;
+}
+
+#historialContainer.visible {
+    display: block;
+}
+
+.tarea-item {
+    border: 1px solid #ddd;
+    margin-bottom: 10px;
+    padding: 15px;
+    border-radius: 5px;
+}
+
+.prioridad-alta {
+    border-left: 4px solid #dc3545;
+}
+
+.prioridad-media {
+    border-left: 4px solid #ffc107;
+}
+
+.prioridad-baja {
+    border-left: 4px solid #198754;
+}
