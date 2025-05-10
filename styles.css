@@ -248,3 +248,12 @@
 .prioridad-baja {
     border-left: 4px solid #198754;
 }
+
+.input-group {
+    position: relative;
+}
+
+select.form-select option[value="nueva_sala"] {
+    font-style: italic;
+    color: #0d6efd;
+}
