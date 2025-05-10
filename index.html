@@ -139,10 +139,10 @@
                                 <div class="col-md-6">
                                     <label class="form-label">Sala</label>
                                     <div class="input-group">
-                                        <select class="form-select" id="titulo" required>
-                                            <option value="">Seleccione una sala</option>
-                                            <option value="nueva_sala">+ Agregar nueva sala</option>
-                                        </select>
+                                        <input type="text" class="form-control" id="titulo" list="salasList" required>
+                                        <datalist id="salasList">
+                                            <!-- Las opciones se llenarán dinámicamente -->
+                                        </datalist>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
