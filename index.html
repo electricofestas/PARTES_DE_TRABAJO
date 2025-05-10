@@ -20,10 +20,12 @@
                             <div class="row mb-3">
                                 <div class="col-md-6">
                                     <label class="form-label">Sala</label>
-                                    <input type="text" class="form-control" id="titulo" list="salasList" required>
-                                    <datalist id="salasList">
-                                        <!-- Las opciones se llenarán dinámicamente -->
-                                    </datalist>
+                                    <div class="input-group">
+                                        <select class="form-select" id="titulo" required>
+                                            <option value="">Seleccione una sala</option>
+                                            <option value="nueva_sala">+ Agregar nueva sala</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Prioridad</label>
