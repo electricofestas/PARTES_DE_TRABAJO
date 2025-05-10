@@ -3,24 +3,17 @@ const tareaForm = document.getElementById('tareaForm');
 const toggleHistorialBtn = document.getElementById('toggleHistorial');
 const historialContainer = document.getElementById('historialContainer');
 const historialTareas = document.getElementById('historialTareas');
-const selectSala = document.getElementById('titulo');
+const inputSala = document.getElementById('titulo');
+const salasList = document.getElementById('salasList');
 let tareaEditandoId = null;
 
 // Función para cargar las salas guardadas
 function cargarSalas() {
     try {
         const salasGuardadas = JSON.parse(localStorage.getItem('salas')) || [];
-        
-        // Limpiar opciones existentes excepto la primera (placeholder)
-        while (selectSala.options.length > 1) {
-            selectSala.remove(1);
-        }
-        
-        // Agregar las salas guardadas al select
-        salasGuardadas.forEach(sala => {
-            const option = new Option(sala, sala);
-            selectSala.add(option);
-        });
+        salasList.innerHTML = salasGuardadas
+            .map(sala => `<option value="${sala}">`)
+            .join('');
     } catch (error) {
         console.error('Error al cargar las salas:', error);
         mostrarMensaje('Error al cargar las salas guardadas');
@@ -29,32 +22,24 @@ function cargarSalas() {
 
 // Función para guardar una nueva sala
 function guardarNuevaSala(sala) {
-    const salasGuardadas = JSON.parse(localStorage.getItem('salas')) || [];
-    if (!salasGuardadas.includes(sala)) {
-        salasGuardadas.push(sala);
-        localStorage.setItem('salas', JSON.stringify(salasGuardadas));
-        const option = new Option(sala, sala);
-        selectSala.add(option);
+    try {
+        const salasGuardadas = JSON.parse(localStorage.getItem('salas')) || [];
+        if (!salasGuardadas.includes(sala)) {
+            salasGuardadas.push(sala);
+            localStorage.setItem('salas', JSON.stringify(salasGuardadas));
+            cargarSalas();
+        }
+    } catch (error) {
+        console.error('Error al guardar la sala:', error);
+        mostrarMensaje('Error al guardar la nueva sala');
     }
 }
 
-// Agregar evento para permitir agregar nuevas salas
-selectSala.addEventListener('change', (e) => {
-    if (e.target.value === 'nueva_sala') {
-        const nuevaSala = prompt('Ingrese el nombre de la nueva sala:');
-        if (nuevaSala && nuevaSala.trim()) {
-            // Validar caracteres especiales y longitud
-            const nombreValido = /^[a-zA-Z0-9\s._-]{3,50}$/.test(nuevaSala.trim());
-            if (!nombreValido) {
-                alert('El nombre de la sala debe tener entre 3 y 50 caracteres y solo puede contener letras, números, espacios, puntos, guiones y guiones bajos');
-                selectSala.value = '';
-                return;
-            }
-            guardarNuevaSala(nuevaSala.trim());
-            selectSala.value = nuevaSala;
-        } else {
-            selectSala.value = '';
-        }
+// Evento para guardar nueva sala cuando se pierde el foco
+inputSala.addEventListener('blur', function() {
+    const valor = this.value.trim();
+    if (valor) {
+        guardarNuevaSala(valor);
     }
 });
 
@@ -85,83 +70,136 @@ document.addEventListener('DOMContentLoaded', () => {
     cargarSalas();
     mostrarTareas();
     
-    // Agregar opción para nueva sala
-    const optionNueva = new Option('+ Agregar nueva sala', 'nueva_sala');
-    selectSala.add(optionNueva);
+    // Configurar validación del input de sala
+    inputSala.addEventListener('input', (e) => {
+        const valor = e.target.value.trim();
+        const nombreValido = /^[a-zA-Z0-9\s._-]{3,50}$/.test(valor);
+        if (!nombreValido) {
+            inputSala.setCustomValidity('El nombre de la sala debe tener entre 3 y 50 caracteres y solo puede contener letras, números, espacios, puntos, guiones y guiones bajos');
+        } else {
+            inputSala.setCustomValidity('');
+        }
+    });
 });
 
 // Manejar el envío del formulario
 tareaForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     
-    const formData = {
-        titulo: document.getElementById('titulo').value.trim(),
-        descripcion: document.getElementById('descripcion').value.trim(),
-        fecha: document.getElementById('fecha').value,
-        horaInicio: document.getElementById('horaInicio').value,
-        horaFin: document.getElementById('horaFin').value,
-        prioridad: document.getElementById('prioridad').value
-    };
+    // Obtener valores del formulario
+    const titulo = document.getElementById('titulo').value.trim();
+    const descripcion = document.getElementById('descripcion').value.trim();
+    const fecha = document.getElementById('fecha').value;
+    const horaInicio = document.getElementById('horaInicio').value;
+    const horaFin = document.getElementById('horaFin').value;
+    const prioridad = document.getElementById('prioridad').value;
     
-    // Validaciones
-    if (Object.values(formData).some(value => !value)) {
+    // Validar campos obligatorios
+    if (!titulo || !descripcion || !fecha || !horaInicio || !horaFin || !prioridad) {
         alert('Por favor, complete todos los campos obligatorios');
         return;
     }
 
-    if (!validarFecha(formData.fecha)) {
+    // Validar que la fecha no sea anterior a la actual
+    const fechaSeleccionada = new Date(fecha);
+    const fechaActual = new Date();
+    fechaActual.setHours(0, 0, 0, 0);
+    if (fechaSeleccionada < fechaActual) {
         alert('La fecha no puede ser anterior a la fecha actual');
         return;
     }
     
-    if (formData.horaFin <= formData.horaInicio) {
+    // Validar que la hora de fin sea posterior a la hora de inicio
+    if (horaFin <= horaInicio) {
         alert('La hora de finalización debe ser posterior a la hora de inicio');
         return;
     }
     
     try {
-        const fotos = await procesarFotos(document.getElementById('fotos'));
-        
         if (tareaEditandoId) {
+            // Estamos editando un registro existente
             const tareaExistente = JSON.parse(localStorage.getItem(tareaEditandoId));
+            
+            // Crear nueva versión del registro
             const tareaActualizada = {
-                ...formData,
                 id: tareaEditandoId,
+                titulo,
+                descripcion,
+                fecha,
+                horaInicio,
+                horaFin,
+                prioridad,
                 fechaCreacion: tareaExistente.fechaCreacion,
                 fechaModificacion: new Date().toISOString(),
-                version: (tareaExistente.version || 1) + 1,
-                fotos: fotos.length > 0 ? fotos : tareaExistente.fotos
+                version: (tareaExistente.version || 1) + 1
             };
             
+            // Guardar la versión actualizada
             localStorage.setItem(tareaEditandoId, JSON.stringify(tareaActualizada));
+
+            // Manejar las fotos si existen
+            const fotosInput = document.getElementById('fotos');
+            if (fotosInput.files.length > 0) {
+                const fotos = [];
+                for (let i = 0; i < fotosInput.files.length; i++) {
+                    const file = fotosInput.files[i];
+                    const reader = new FileReader();
+                    reader.onloadend = function() {
+                        fotos.push(reader.result);
+                        if (fotos.length === fotosInput.files.length) {
+                            // Guardar las fotos en el registro
+                            tareaActualizada.fotos = fotos;
+                            localStorage.setItem(tareaEditandoId, JSON.stringify(tareaActualizada));
+                            mostrarTareas();
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+
             mostrarMensaje('Registro actualizado correctamente');
+            
+            // Resetear el modo de edición
             tareaEditandoId = null;
             document.querySelector('.btn-primary').textContent = 'Guardar Tarea';
+            
         } else {
-            guardarNuevaSala(formData.titulo);
+            // Guardar la sala si no existe
+            guardarNuevaSala(titulo);
+            
+            // Crear nuevo registro
             const nuevoId = `tarea_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const nuevaTarea = {
-                ...formData,
                 id: nuevoId,
+                titulo,
+                descripcion,
+                fecha,
+                horaInicio,
+                horaFin,
+                prioridad,
                 fechaCreacion: new Date().toISOString(),
-                version: 1,
-                fotos
+                version: 1
             };
             
+            // Guardar nuevo registro
             localStorage.setItem(nuevoId, JSON.stringify(nuevaTarea));
-            const indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
+            
+            // Actualizar índice
+            let indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
             indicesTareas.push(nuevoId);
             localStorage.setItem('indicesTareas', JSON.stringify(indicesTareas));
+            
             mostrarMensaje('Nuevo registro guardado');
         }
         
+        // Limpiar formulario y actualizar vista
         tareaForm.reset();
         mostrarTareas();
+        
     } catch (error) {
         console.error('Error al guardar:', error);
         mostrarMensaje('Error al procesar el registro');
     }
-});
 });
 
 // Función para cargar registro en el formulario para edición
@@ -231,36 +269,45 @@ function mostrarMensaje(texto) {
     }, 2000);
 }
 
-// Toggle del historial
-toggleHistorialBtn.addEventListener('click', () => {
-    const estaOculto = historialContainer.classList.contains('hidden');
-    if (estaOculto) {
+// Función para mostrar/ocultar el historial
+function toggleHistorial() {
+    if (historialContainer.classList.contains('hidden')) {
         historialContainer.classList.remove('hidden');
         toggleHistorialBtn.textContent = 'Ocultar Historial';
+        mostrarTareas();
     } else {
         historialContainer.classList.add('hidden');
         toggleHistorialBtn.textContent = 'Mostrar Historial';
     }
-});
-
-// Función auxiliar para obtener tareas del localStorage
-function obtenerTareasDelStorage() {
-    const indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
-    return indicesTareas
-        .map(id => {
-            const tareaData = localStorage.getItem(id);
-            if (!tareaData) return null;
-            return JSON.parse(tareaData);
-        })
-        .filter(tarea => tarea !== null);
 }
+
+// Evento para el botón de mostrar/ocultar historial
+toggleHistorialBtn.addEventListener('click', toggleHistorial);
+
+// Cargar salas al iniciar la página
+document.addEventListener('DOMContentLoaded', function() {
+    cargarSalas();
+    // Inicializar el historial oculto
+    if (historialContainer) {
+        historialContainer.classList.add('hidden');
+    }
+});
 
 // Función para mostrar tareas
 function mostrarTareas() {
     historialTareas.innerHTML = '';
     
     try {
-        const tareas = obtenerTareasDelStorage();
+        const indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
+        
+        // Obtener y procesar registros
+        const tareas = indicesTareas
+            .map(id => {
+                const tareaData = localStorage.getItem(id);
+                if (!tareaData) return null;
+                return JSON.parse(tareaData);
+            })
+            .filter(tarea => tarea !== null);
         
         // Ordenar por fecha de creación (más recientes primero)
         tareas.sort((a, b) => new Date(b.fechaCreacion) - new Date(a.fechaCreacion));
@@ -352,8 +399,14 @@ function actualizarSelectorSalasPDF() {
     const salasGuardadas = new Set();
     
     // Obtener todas las salas únicas del historial
-    const tareas = obtenerTareasDelStorage();
-    tareas.forEach(tarea => salasGuardadas.add(tarea.titulo));
+    const indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
+    indicesTareas.forEach(id => {
+        const tareaData = localStorage.getItem(id);
+        if (tareaData) {
+            const tarea = JSON.parse(tareaData);
+            salasGuardadas.add(tarea.titulo);
+        }
+    });
     
     // Limpiar opciones existentes excepto la primera (Todas las salas)
     while (salaFiltro.options.length > 1) {
@@ -383,20 +436,27 @@ function formatearFecha(fecha) {
 // Función para generar el PDF
 async function generarPDF(fechaInicio, fechaFin, salaSeleccionada) {
     try {
-        let tareas = obtenerTareasDelStorage();
-        
-        // Filtrar por fecha y sala
-        tareas = tareas.filter(tarea => {
-            const fechaTarea = new Date(tarea.fecha);
-            const inicio = new Date(fechaInicio);
-            const fin = new Date(fechaFin);
-            
-            const cumpleFecha = fechaTarea >= inicio && fechaTarea <= fin;
-            if (salaSeleccionada) {
-                return cumpleFecha && tarea.titulo === salaSeleccionada;
-            }
-            return cumpleFecha;
-        });
+        // Obtener tareas del localStorage
+        const indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
+        let tareas = indicesTareas
+            .map(id => {
+                const tareaData = localStorage.getItem(id);
+                if (!tareaData) return null;
+                return JSON.parse(tareaData);
+            })
+            .filter(tarea => {
+                if (!tarea) return false;
+                const fechaTarea = new Date(tarea.fecha);
+                const inicio = new Date(fechaInicio);
+                const fin = new Date(fechaFin);
+                
+                // Filtrar por fecha y sala si está seleccionada
+                const cumpleFecha = fechaTarea >= inicio && fechaTarea <= fin;
+                if (salaSeleccionada) {
+                    return cumpleFecha && tarea.titulo === salaSeleccionada;
+                }
+                return cumpleFecha;
+            });
 
         // Ordenar por fecha
         tareas.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
@@ -541,42 +601,42 @@ document.getElementById('cerrarFiltroBtn').addEventListener('click', () => {
     document.getElementById('fechaFiltroContainer').classList.remove('visible');
 });
 
-// Funciones auxiliares
-function obtenerTareasDelStorage() {
-    const indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
-    return indicesTareas
-        .map(id => {
-            const tareaData = localStorage.getItem(id);
-            if (!tareaData) return null;
-            return JSON.parse(tareaData);
-        })
-        .filter(tarea => tarea !== null);
-}
+// Función para validar campos del formulario
+function validarFormulario() {
+    const titulo = document.getElementById('titulo').value.trim();
+    const descripcion = document.getElementById('descripcion').value.trim();
+    const fecha = document.getElementById('fecha').value;
+    const horaInicio = document.getElementById('horaInicio').value;
+    const horaFin = document.getElementById('horaFin').value;
+    
+    // Validar campos obligatorios
+    if (!titulo || !descripcion || !fecha || !horaInicio || !horaFin) {
+        mostrarMensaje('Por favor, complete todos los campos obligatorios', 'error');
+        return false;
+    }
 
-function validarFecha(fecha) {
+    // Validar longitud de la descripción
+    if (descripcion.length > 500) {
+        mostrarMensaje('La descripción no puede exceder los 500 caracteres', 'error');
+        return false;
+    }
+
+    // Validar fecha (no permitir fechas futuras)
     const fechaSeleccionada = new Date(fecha);
     const fechaActual = new Date();
     fechaActual.setHours(0, 0, 0, 0);
-    return fechaSeleccionada >= fechaActual;
-}
-
-async function procesarFotos(fotosInput) {
-    if (!fotosInput || fotosInput.files.length === 0) return [];
-    
-    const fotos = [];
-    for (const file of fotosInput.files) {
-        const foto = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.readAsDataURL(file);
-        });
-        fotos.push(foto);
+    if (fechaSeleccionada > fechaActual) {
+        mostrarMensaje('No se pueden registrar tareas con fecha futura', 'error');
+        return false;
     }
-    return fotos;
-}
 
-function validarNombreSala(nombre) {
-    return /^[a-zA-Z0-9\s._-]{3,50}$/.test(nombre.trim());
+    // Validar horas
+    if (horaFin <= horaInicio) {
+        mostrarMensaje('La hora de finalización debe ser posterior a la hora de inicio', 'error');
+        return false;
+    }
+
+    return true;
 }
 
 // Función mejorada para mostrar mensajes
@@ -692,22 +752,6 @@ function limpiarDatosAntiguos() {
     }
 }
 
-// Función para procesar fotos
-async function procesarFotos(fotosInput) {
-    if (!fotosInput || fotosInput.files.length === 0) return [];
-    
-    const fotos = [];
-    for (const file of fotosInput.files) {
-        const foto = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.readAsDataURL(file);
-        });
-        fotos.push(foto);
-    }
-    return fotos;
-}
-
 // Modificar el evento submit del formulario
 tareaForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -718,14 +762,22 @@ tareaForm.addEventListener('submit', async (e) => {
     
     // ... existing code ...
 });
-document.getElementById('mostrarHistorial').addEventListener('click', function() {
-    // Lógica para mostrar el historial
+// Función para alternar la visibilidad del historial
+function toggleHistorial() {
     const historialContainer = document.getElementById('historialContainer');
-    if (historialContainer) {
-        historialContainer.classList.toggle('hidden');
+    const toggleHistorialBtn = document.getElementById('toggleHistorial');
+    
+    if (historialContainer.classList.contains('hidden')) {
+        historialContainer.classList.remove('hidden');
+        toggleHistorialBtn.textContent = 'Ocultar Historial';
+    } else {
+        historialContainer.classList.add('hidden');
+        toggleHistorialBtn.textContent = 'Mostrar Historial';
     }
-    mostrarTareas();
-});
+}
+
+// Agregar el evento click al botón
+document.getElementById('toggleHistorial').addEventListener('click', toggleHistorial);
 
 document.getElementById('generarPDF').addEventListener('click', function() {
     // Mostrar el diálogo de selección de fechas para el PDF
@@ -743,42 +795,42 @@ document.getElementById('cerrarFiltroBtn').addEventListener('click', () => {
     document.getElementById('fechaFiltroContainer').classList.remove('visible');
 });
 
-// Funciones auxiliares
-function obtenerTareasDelStorage() {
-    const indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
-    return indicesTareas
-        .map(id => {
-            const tareaData = localStorage.getItem(id);
-            if (!tareaData) return null;
-            return JSON.parse(tareaData);
-        })
-        .filter(tarea => tarea !== null);
-}
+// Función para validar campos del formulario
+function validarFormulario() {
+    const titulo = document.getElementById('titulo').value.trim();
+    const descripcion = document.getElementById('descripcion').value.trim();
+    const fecha = document.getElementById('fecha').value;
+    const horaInicio = document.getElementById('horaInicio').value;
+    const horaFin = document.getElementById('horaFin').value;
+    
+    // Validar campos obligatorios
+    if (!titulo || !descripcion || !fecha || !horaInicio || !horaFin) {
+        mostrarMensaje('Por favor, complete todos los campos obligatorios', 'error');
+        return false;
+    }
 
-function validarFecha(fecha) {
+    // Validar longitud de la descripción
+    if (descripcion.length > 500) {
+        mostrarMensaje('La descripción no puede exceder los 500 caracteres', 'error');
+        return false;
+    }
+
+    // Validar fecha (no permitir fechas futuras)
     const fechaSeleccionada = new Date(fecha);
     const fechaActual = new Date();
     fechaActual.setHours(0, 0, 0, 0);
-    return fechaSeleccionada >= fechaActual;
-}
-
-async function procesarFotos(fotosInput) {
-    if (!fotosInput || fotosInput.files.length === 0) return [];
-    
-    const fotos = [];
-    for (const file of fotosInput.files) {
-        const foto = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.readAsDataURL(file);
-        });
-        fotos.push(foto);
+    if (fechaSeleccionada > fechaActual) {
+        mostrarMensaje('No se pueden registrar tareas con fecha futura', 'error');
+        return false;
     }
-    return fotos;
-}
 
-function validarNombreSala(nombre) {
-    return /^[a-zA-Z0-9\s._-]{3,50}$/.test(nombre.trim());
+    // Validar horas
+    if (horaFin <= horaInicio) {
+        mostrarMensaje('La hora de finalización debe ser posterior a la hora de inicio', 'error');
+        return false;
+    }
+
+    return true;
 }
 
 // Función mejorada para mostrar mensajes
@@ -894,22 +946,6 @@ function limpiarDatosAntiguos() {
     }
 }
 
-// Función para procesar fotos
-async function procesarFotos(fotosInput) {
-    if (!fotosInput || fotosInput.files.length === 0) return [];
-    
-    const fotos = [];
-    for (const file of fotosInput.files) {
-        const foto = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.readAsDataURL(file);
-        });
-        fotos.push(foto);
-    }
-    return fotos;
-}
-
 // Modificar el evento submit del formulario
 tareaForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -919,14 +955,22 @@ tareaForm.addEventListener('submit', async (e) => {
     }
     
     // ... existing code ...
-document.getElementById('mostrarHistorial').addEventListener('click', function() {
-    // Lógica para mostrar el historial
+// Función para alternar la visibilidad del historial
+function toggleHistorial() {
     const historialContainer = document.getElementById('historialContainer');
-    if (historialContainer) {
-        historialContainer.classList.toggle('hidden');
+    const toggleHistorialBtn = document.getElementById('toggleHistorial');
+    
+    if (historialContainer.classList.contains('hidden')) {
+        historialContainer.classList.remove('hidden');
+        toggleHistorialBtn.textContent = 'Ocultar Historial';
+    } else {
+        historialContainer.classList.add('hidden');
+        toggleHistorialBtn.textContent = 'Mostrar Historial';
     }
-    mostrarTareas();
-});
+}
+
+// Agregar el evento click al botón
+document.getElementById('toggleHistorial').addEventListener('click', toggleHistorial);
 
 document.getElementById('generarPDF').addEventListener('click', function() {
     // Mostrar el diálogo de selección de fechas para el PDF
@@ -944,42 +988,42 @@ document.getElementById('cerrarFiltroBtn').addEventListener('click', () => {
     document.getElementById('fechaFiltroContainer').classList.remove('visible');
 });
 
-// Funciones auxiliares
-function obtenerTareasDelStorage() {
-    const indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
-    return indicesTareas
-        .map(id => {
-            const tareaData = localStorage.getItem(id);
-            if (!tareaData) return null;
-            return JSON.parse(tareaData);
-        })
-        .filter(tarea => tarea !== null);
-}
+// Función para validar campos del formulario
+function validarFormulario() {
+    const titulo = document.getElementById('titulo').value.trim();
+    const descripcion = document.getElementById('descripcion').value.trim();
+    const fecha = document.getElementById('fecha').value;
+    const horaInicio = document.getElementById('horaInicio').value;
+    const horaFin = document.getElementById('horaFin').value;
+    
+    // Validar campos obligatorios
+    if (!titulo || !descripcion || !fecha || !horaInicio || !horaFin) {
+        mostrarMensaje('Por favor, complete todos los campos obligatorios', 'error');
+        return false;
+    }
 
-function validarFecha(fecha) {
+    // Validar longitud de la descripción
+    if (descripcion.length > 500) {
+        mostrarMensaje('La descripción no puede exceder los 500 caracteres', 'error');
+        return false;
+    }
+
+    // Validar fecha (no permitir fechas futuras)
     const fechaSeleccionada = new Date(fecha);
     const fechaActual = new Date();
     fechaActual.setHours(0, 0, 0, 0);
-    return fechaSeleccionada >= fechaActual;
-}
-
-async function procesarFotos(fotosInput) {
-    if (!fotosInput || fotosInput.files.length === 0) return [];
-    
-    const fotos = [];
-    for (const file of fotosInput.files) {
-        const foto = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.readAsDataURL(file);
-        });
-        fotos.push(foto);
+    if (fechaSeleccionada > fechaActual) {
+        mostrarMensaje('No se pueden registrar tareas con fecha futura', 'error');
+        return false;
     }
-    return fotos;
-}
 
-function validarNombreSala(nombre) {
-    return /^[a-zA-Z0-9\s._-]{3,50}$/.test(nombre.trim());
+    // Validar horas
+    if (horaFin <= horaInicio) {
+        mostrarMensaje('La hora de finalización debe ser posterior a la hora de inicio', 'error');
+        return false;
+    }
+
+    return true;
 }
 
 // Función mejorada para mostrar mensajes
@@ -1093,22 +1137,6 @@ function limpiarDatosAntiguos() {
     } catch (error) {
         console.error('Error al limpiar datos antiguos:', error);
     }
-}
-
-// Función para procesar fotos
-async function procesarFotos(fotosInput) {
-    if (!fotosInput || fotosInput.files.length === 0) return [];
-    
-    const fotos = [];
-    for (const file of fotosInput.files) {
-        const foto = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.readAsDataURL(file);
-        });
-        fotos.push(foto);
-    }
-    return fotos;
 }
 
 // Modificar el evento submit del formulario
@@ -1147,7 +1175,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const hoy = new Date().toISOString().split('T')[0];
     inputFecha.max = hoy;
     
-    // Agregar opción para nueva sala
-    const optionNueva = new Option('+ Agregar nueva sala', 'nueva_sala');
-    selectSala.add(optionNueva);
+    // Configurar validación del input de sala
+    inputSala.addEventListener('input', (e) => {
+        const valor = e.target.value.trim();
+        const nombreValido = /^[a-zA-Z0-9\s._-]{3,50}$/.test(valor);
+        if (!nombreValido) {
+            inputSala.setCustomValidity('El nombre de la sala debe tener entre 3 y 50 caracteres y solo puede contener letras, números, espacios, puntos, guiones y guiones bajos');
+        } else {
+            inputSala.setCustomValidity('');
+        }
+    });
 });
