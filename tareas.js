@@ -94,120 +94,74 @@ document.addEventListener('DOMContentLoaded', () => {
 tareaForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     
-    // Obtener valores del formulario
-    const titulo = document.getElementById('titulo').value.trim();
-    const descripcion = document.getElementById('descripcion').value.trim();
-    const fecha = document.getElementById('fecha').value;
-    const horaInicio = document.getElementById('horaInicio').value;
-    const horaFin = document.getElementById('horaFin').value;
-    const prioridad = document.getElementById('prioridad').value;
+    const formData = {
+        titulo: document.getElementById('titulo').value.trim(),
+        descripcion: document.getElementById('descripcion').value.trim(),
+        fecha: document.getElementById('fecha').value,
+        horaInicio: document.getElementById('horaInicio').value,
+        horaFin: document.getElementById('horaFin').value,
+        prioridad: document.getElementById('prioridad').value
+    };
     
-    // Validar campos obligatorios
-    if (!titulo || !descripcion || !fecha || !horaInicio || !horaFin || !prioridad) {
+    // Validaciones
+    if (Object.values(formData).some(value => !value)) {
         alert('Por favor, complete todos los campos obligatorios');
         return;
     }
 
-    // Validar que la fecha no sea anterior a la actual
-    const fechaSeleccionada = new Date(fecha);
-    const fechaActual = new Date();
-    fechaActual.setHours(0, 0, 0, 0);
-    if (fechaSeleccionada < fechaActual) {
+    if (!validarFecha(formData.fecha)) {
         alert('La fecha no puede ser anterior a la fecha actual');
         return;
     }
     
-    // Validar que la hora de fin sea posterior a la hora de inicio
-    if (horaFin <= horaInicio) {
+    if (formData.horaFin <= formData.horaInicio) {
         alert('La hora de finalización debe ser posterior a la hora de inicio');
         return;
     }
     
     try {
+        const fotos = await procesarFotos(document.getElementById('fotos'));
+        
         if (tareaEditandoId) {
-            // Estamos editando un registro existente
             const tareaExistente = JSON.parse(localStorage.getItem(tareaEditandoId));
-            
-            // Crear nueva versión del registro
             const tareaActualizada = {
+                ...formData,
                 id: tareaEditandoId,
-                titulo,
-                descripcion,
-                fecha,
-                horaInicio,
-                horaFin,
-                prioridad,
                 fechaCreacion: tareaExistente.fechaCreacion,
                 fechaModificacion: new Date().toISOString(),
-                version: (tareaExistente.version || 1) + 1
+                version: (tareaExistente.version || 1) + 1,
+                fotos: fotos.length > 0 ? fotos : tareaExistente.fotos
             };
             
-            // Guardar la versión actualizada
             localStorage.setItem(tareaEditandoId, JSON.stringify(tareaActualizada));
-
-            // Manejar las fotos si existen
-            const fotosInput = document.getElementById('fotos');
-            if (fotosInput.files.length > 0) {
-                const fotos = [];
-                for (let i = 0; i < fotosInput.files.length; i++) {
-                    const file = fotosInput.files[i];
-                    const reader = new FileReader();
-                    reader.onloadend = function() {
-                        fotos.push(reader.result);
-                        if (fotos.length === fotosInput.files.length) {
-                            // Guardar las fotos en el registro
-                            tareaActualizada.fotos = fotos;
-                            localStorage.setItem(tareaEditandoId, JSON.stringify(tareaActualizada));
-                            mostrarTareas();
-                        }
-                    };
-                    reader.readAsDataURL(file);
-                }
-            }
-
             mostrarMensaje('Registro actualizado correctamente');
-            
-            // Resetear el modo de edición
             tareaEditandoId = null;
             document.querySelector('.btn-primary').textContent = 'Guardar Tarea';
-            
         } else {
-            // Guardar la sala si no existe
-            guardarNuevaSala(titulo);
-            
-            // Crear nuevo registro
+            guardarNuevaSala(formData.titulo);
             const nuevoId = `tarea_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const nuevaTarea = {
+                ...formData,
                 id: nuevoId,
-                titulo,
-                descripcion,
-                fecha,
-                horaInicio,
-                horaFin,
-                prioridad,
                 fechaCreacion: new Date().toISOString(),
-                version: 1
+                version: 1,
+                fotos
             };
             
-            // Guardar nuevo registro
             localStorage.setItem(nuevoId, JSON.stringify(nuevaTarea));
-            
-            // Actualizar índice
-            let indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
+            const indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
             indicesTareas.push(nuevoId);
             localStorage.setItem('indicesTareas', JSON.stringify(indicesTareas));
-            
             mostrarMensaje('Nuevo registro guardado');
         }
         
-        // Limpiar formulario y actualizar vista
         tareaForm.reset();
         mostrarTareas();
-        
     } catch (error) {
         console.error('Error al guardar:', error);
         mostrarMensaje('Error al procesar el registro');
     }
+});
 });
 
 // Función para cargar registro en el formulario para edición
@@ -587,7 +541,18 @@ document.getElementById('cerrarFiltroBtn').addEventListener('click', () => {
     document.getElementById('fechaFiltroContainer').classList.remove('visible');
 });
 
-// Función para validar fechas
+// Funciones auxiliares
+function obtenerTareasDelStorage() {
+    const indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
+    return indicesTareas
+        .map(id => {
+            const tareaData = localStorage.getItem(id);
+            if (!tareaData) return null;
+            return JSON.parse(tareaData);
+        })
+        .filter(tarea => tarea !== null);
+}
+
 function validarFecha(fecha) {
     const fechaSeleccionada = new Date(fecha);
     const fechaActual = new Date();
@@ -595,39 +560,23 @@ function validarFecha(fecha) {
     return fechaSeleccionada >= fechaActual;
 }
 
-// Función para validar campos del formulario
-function validarFormulario() {
-    const titulo = document.getElementById('titulo').value.trim();
-    const descripcion = document.getElementById('descripcion').value.trim();
-    const fecha = document.getElementById('fecha').value;
-    const horaInicio = document.getElementById('horaInicio').value;
-    const horaFin = document.getElementById('horaFin').value;
+async function procesarFotos(fotosInput) {
+    if (!fotosInput || fotosInput.files.length === 0) return [];
     
-    // Validar campos obligatorios
-    if (!titulo || !descripcion || !fecha || !horaInicio || !horaFin) {
-        mostrarMensaje('Por favor, complete todos los campos obligatorios', 'error');
-        return false;
+    const fotos = [];
+    for (const file of fotosInput.files) {
+        const foto = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(file);
+        });
+        fotos.push(foto);
     }
+    return fotos;
+}
 
-    // Validar longitud de la descripción
-    if (descripcion.length > 500) {
-        mostrarMensaje('La descripción no puede exceder los 500 caracteres', 'error');
-        return false;
-    }
-
-    // Validar fecha (no permitir fechas futuras)
-    if (!validarFecha(fecha)) {
-        mostrarMensaje('No se pueden registrar tareas con fecha futura', 'error');
-        return false;
-    }
-
-    // Validar horas
-    if (horaFin <= horaInicio) {
-        mostrarMensaje('La hora de finalización debe ser posterior a la hora de inicio', 'error');
-        return false;
-    }
-
-    return true;
+function validarNombreSala(nombre) {
+    return /^[a-zA-Z0-9\s._-]{3,50}$/.test(nombre.trim());
 }
 
 // Función mejorada para mostrar mensajes
@@ -794,7 +743,18 @@ document.getElementById('cerrarFiltroBtn').addEventListener('click', () => {
     document.getElementById('fechaFiltroContainer').classList.remove('visible');
 });
 
-// Función para validar fechas
+// Funciones auxiliares
+function obtenerTareasDelStorage() {
+    const indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
+    return indicesTareas
+        .map(id => {
+            const tareaData = localStorage.getItem(id);
+            if (!tareaData) return null;
+            return JSON.parse(tareaData);
+        })
+        .filter(tarea => tarea !== null);
+}
+
 function validarFecha(fecha) {
     const fechaSeleccionada = new Date(fecha);
     const fechaActual = new Date();
@@ -802,39 +762,23 @@ function validarFecha(fecha) {
     return fechaSeleccionada >= fechaActual;
 }
 
-// Función para validar campos del formulario
-function validarFormulario() {
-    const titulo = document.getElementById('titulo').value.trim();
-    const descripcion = document.getElementById('descripcion').value.trim();
-    const fecha = document.getElementById('fecha').value;
-    const horaInicio = document.getElementById('horaInicio').value;
-    const horaFin = document.getElementById('horaFin').value;
+async function procesarFotos(fotosInput) {
+    if (!fotosInput || fotosInput.files.length === 0) return [];
     
-    // Validar campos obligatorios
-    if (!titulo || !descripcion || !fecha || !horaInicio || !horaFin) {
-        mostrarMensaje('Por favor, complete todos los campos obligatorios', 'error');
-        return false;
+    const fotos = [];
+    for (const file of fotosInput.files) {
+        const foto = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(file);
+        });
+        fotos.push(foto);
     }
+    return fotos;
+}
 
-    // Validar longitud de la descripción
-    if (descripcion.length > 500) {
-        mostrarMensaje('La descripción no puede exceder los 500 caracteres', 'error');
-        return false;
-    }
-
-    // Validar fecha (no permitir fechas futuras)
-    if (!validarFecha(fecha)) {
-        mostrarMensaje('No se pueden registrar tareas con fecha futura', 'error');
-        return false;
-    }
-
-    // Validar horas
-    if (horaFin <= horaInicio) {
-        mostrarMensaje('La hora de finalización debe ser posterior a la hora de inicio', 'error');
-        return false;
-    }
-
-    return true;
+function validarNombreSala(nombre) {
+    return /^[a-zA-Z0-9\s._-]{3,50}$/.test(nombre.trim());
 }
 
 // Función mejorada para mostrar mensajes
@@ -1000,7 +944,18 @@ document.getElementById('cerrarFiltroBtn').addEventListener('click', () => {
     document.getElementById('fechaFiltroContainer').classList.remove('visible');
 });
 
-// Función para validar fechas
+// Funciones auxiliares
+function obtenerTareasDelStorage() {
+    const indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
+    return indicesTareas
+        .map(id => {
+            const tareaData = localStorage.getItem(id);
+            if (!tareaData) return null;
+            return JSON.parse(tareaData);
+        })
+        .filter(tarea => tarea !== null);
+}
+
 function validarFecha(fecha) {
     const fechaSeleccionada = new Date(fecha);
     const fechaActual = new Date();
@@ -1008,39 +963,23 @@ function validarFecha(fecha) {
     return fechaSeleccionada >= fechaActual;
 }
 
-// Función para validar campos del formulario
-function validarFormulario() {
-    const titulo = document.getElementById('titulo').value.trim();
-    const descripcion = document.getElementById('descripcion').value.trim();
-    const fecha = document.getElementById('fecha').value;
-    const horaInicio = document.getElementById('horaInicio').value;
-    const horaFin = document.getElementById('horaFin').value;
+async function procesarFotos(fotosInput) {
+    if (!fotosInput || fotosInput.files.length === 0) return [];
     
-    // Validar campos obligatorios
-    if (!titulo || !descripcion || !fecha || !horaInicio || !horaFin) {
-        mostrarMensaje('Por favor, complete todos los campos obligatorios', 'error');
-        return false;
+    const fotos = [];
+    for (const file of fotosInput.files) {
+        const foto = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(file);
+        });
+        fotos.push(foto);
     }
+    return fotos;
+}
 
-    // Validar longitud de la descripción
-    if (descripcion.length > 500) {
-        mostrarMensaje('La descripción no puede exceder los 500 caracteres', 'error');
-        return false;
-    }
-
-    // Validar fecha (no permitir fechas futuras)
-    if (!validarFecha(fecha)) {
-        mostrarMensaje('No se pueden registrar tareas con fecha futura', 'error');
-        return false;
-    }
-
-    // Validar horas
-    if (horaFin <= horaInicio) {
-        mostrarMensaje('La hora de finalización debe ser posterior a la hora de inicio', 'error');
-        return false;
-    }
-
-    return true;
+function validarNombreSala(nombre) {
+    return /^[a-zA-Z0-9\s._-]{3,50}$/.test(nombre.trim());
 }
 
 // Función mejorada para mostrar mensajes
