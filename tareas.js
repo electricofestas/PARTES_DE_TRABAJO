@@ -1,1188 +1,795 @@
-// Obtener elementos del DOM
-const tareaForm = document.getElementById('tareaForm');
-const toggleHistorialBtn = document.getElementById('toggleHistorial');
-const historialContainer = document.getElementById('historialContainer');
-const historialTareas = document.getElementById('historialTareas');
-const inputSala = document.getElementById('titulo');
-const salasList = document.getElementById('salasList');
-let tareaEditandoId = null;
+/**
+ * Main application initialization
+ */
 
-// Función para cargar las salas guardadas
-function cargarSalas() {
-    try {
-        const salasGuardadas = JSON.parse(localStorage.getItem('salas')) || [];
-        salasList.innerHTML = salasGuardadas
-            .map(sala => `<option value="${sala}">`)
-            .join('');
-    } catch (error) {
-        console.error('Error al cargar las salas:', error);
-        mostrarMensaje('Error al cargar las salas guardadas');
-    }
-}
+// Global variable for room list
+let salas = [];
 
-// Función para guardar una nueva sala
-function guardarNuevaSala(sala) {
-    try {
-        const salasGuardadas = JSON.parse(localStorage.getItem('salas')) || [];
-        if (!salasGuardadas.includes(sala)) {
-            salasGuardadas.push(sala);
-            localStorage.setItem('salas', JSON.stringify(salasGuardadas));
-            cargarSalas();
-        }
-    } catch (error) {
-        console.error('Error al guardar la sala:', error);
-        mostrarMensaje('Error al guardar la nueva sala');
+/**
+ * Initialize the application
+ */
+document.addEventListener("DOMContentLoaded", () => {
+  try {
+    // Load tasks from localStorage
+    cargarTareas();
+    
+    // Get DOM elements
+    const form = document.getElementById("tareaForm");
+    const toggleHistorialBtn = document.getElementById("toggleHistorial");
+    const fotosInput = document.getElementById("fotos");
+    const generarPdfBtn = document.getElementById("generarPdfBtn");
+    
+    // Load and initialize rooms
+    initSalas();
+    
+    // Add event listeners
+    if (form) form.addEventListener("submit", guardarTarea);
+    if (toggleHistorialBtn) toggleHistorialBtn.addEventListener("click", toggleHistorial);
+    if (fotosInput) fotosInput.addEventListener("change", mostrarPreviewFotos);
+    
+    // PDF generation
+    if (generarPdfBtn) {
+      generarPdfBtn.addEventListener("click", generarPDF);
     }
-}
-
-// Evento para guardar nueva sala cuando se pierde el foco
-inputSala.addEventListener('blur', function() {
-    const valor = this.value.trim();
-    if (valor) {
-        guardarNuevaSala(valor);
-    }
+    
+    // Initialize form validation
+    initFormValidation();
+    
+    // Update history
+    actualizarHistorial();
+    
+    // Add version information for debugging
+    console.log("App version: 1.1.0 (Photo fix for mobile)");
+  } catch (error) {
+    logError('DOMContentLoaded', error);
+    mostrarMensaje("Error al inicializar la aplicación", "danger");
+  }
 });
 
-// Cargar tareas y salas guardadas al iniciar
-function limpiarDatosAntiguos() {
-    try {
-        const indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
-        const tareasValidas = [];
+/**
+ * Initialize rooms list
+ */
+function initSalas() {
+  try {
+    // Default rooms
+    salas = JSON.parse(localStorage.getItem("salas")) || [
+      "Comida", "Inst. Sanchez", "Central", "Edificio-Vecindario", "Finca_Telde", "Nave Arinaga",
+      "Sala La Mareta", "Sala 7 Palmas", "Sala San Telmo", "Sala Tamaraceite", "Sala Galdar",
+      "Sala Arinaga", "Sala Sol y Sombra", "Sala Kasbah", "Sala Pama Cita", "Sala Traiña",
+      "Sala Puerto Rico", "Sala Mogán Mall", "Sala Mogán"
+    ];
+    
+    // Save to localStorage if not already there
+    if (!localStorage.getItem("salas")) {
+      localStorage.setItem("salas", JSON.stringify(salas));
+    }
+    
+    // Fill datalist
+    const salasList = document.getElementById("salasList");
+    if (salasList) {
+      salasList.innerHTML = "";
+      salas.forEach(sala => {
+        const option = document.createElement("option");
+        option.value = sala;
+        salasList.appendChild(option);
+      });
+    }
+    
+    // Fill filter select
+    const salaFiltro = document.getElementById("salaFiltro");
+    if (salaFiltro) {
+      // Keep the first option (All Rooms)
+      const firstOption = salaFiltro.querySelector("option");
+      salaFiltro.innerHTML = "";
+      if (firstOption) {
+        salaFiltro.appendChild(firstOption);
+      }
+      
+      // Add room options
+      salas.forEach(sala => {
+        const option = document.createElement("option");
+        option.value = sala;
+        option.textContent = sala;
+        salaFiltro.appendChild(option);
+      });
+      
+      // Add change event
+      salaFiltro.addEventListener("change", actualizarHistorial);
+    }
+  } catch (error) {
+    logError('initSalas', error);
+    mostrarMensaje("Error al inicializar las salas", "danger");
+  }
+}
+
+/**
+ * Services for PDF generation in the application
+ */
+
+/**
+ * Generate a PDF report of tasks
+ */
+function generarPDF() {
+  try {
+    // Get filter values
+    const fechaInicio = document.getElementById("fechaInicioPDF") ? document.getElementById("fechaInicioPDF").value : "";
+    const fechaFin = document.getElementById("fechaFinPDF") ? document.getElementById("fechaFinPDF").value : "";
+    const salaSeleccionada = document.getElementById("salaFiltro") ? document.getElementById("salaFiltro").value : "";
+    
+    // Filter tasks
+    let tareasFiltradas = tareas.filter(tarea => {
+      const fechaTarea = new Date(tarea.fecha);
+      const inicio = fechaInicio ? new Date(fechaInicio) : null;
+      const fin = fechaFin ? new Date(fechaFin) : null;
+      return (
+        (!inicio || fechaTarea >= inicio) &&
+        (!fin || fechaTarea <= fin) &&
+        (!salaSeleccionada || tarea.sala === salaSeleccionada)
+      );
+    });
+    
+    // Sort by date
+    tareasFiltradas.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+    
+    // Check if jsPDF is available
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+      mostrarMensaje("jsPDF no está cargado. Asegúrate de incluir jsPDF en tu HTML.", "danger");
+      return;
+    }
+    
+    // Create PDF
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    let yPos = 20;
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 20;
+    
+    // Add title
+    doc.setFontSize(16);
+    doc.text("Informe de Tareas", margin, yPos);
+    const textWidth = doc.getTextWidth("Informe de Tareas");
+    doc.setLineWidth(0.4);
+    doc.line(margin, yPos + 2, margin + textWidth, yPos + 2);
+    yPos += 10;
+    
+    // Add filter info
+    doc.setFontSize(12);
+    doc.text(`Período: ${fechaInicio || "Inicio"} - ${fechaFin || "Fin"}`, margin, yPos);
+    yPos += 10;
+    doc.text(`Sala: ${salaSeleccionada || "Todas"}`, margin, yPos);
+    yPos += 20;
+    
+    // Add tasks
+    tareasFiltradas.forEach(tarea => {
+      // Check if we need a new page
+      if (yPos > pageHeight - 40) {
+        doc.addPage();
+        yPos = 20;
+      }
+      
+      // Add task header
+      doc.setFontSize(14);
+      const salaTexto = tarea.sala;
+      doc.text(salaTexto, margin, yPos);
+      const salaTextWidth = doc.getTextWidth(salaTexto);
+      doc.setLineWidth(0.5);
+      doc.line(margin, yPos + 2, margin + salaTextWidth, yPos + 2);
+      yPos += 10;
+      
+      // Add task details
+      doc.setFontSize(12);
+      doc.text(`Fecha: ${formatDate(tarea.fecha)}`, margin + 10, yPos); yPos += 7;
+      doc.text(`Horario: ${tarea.horaInicio} - ${tarea.horaFin}`, margin + 10, yPos); yPos += 7;
+      doc.text(`Prioridad: ${tarea.prioridad}`, margin + 10, yPos); yPos += 7;
+      doc.text(`Descripción: ${tarea.descripcion}`, margin + 10, yPos); yPos += 10;
+      
+      // Add images
+      if (tarea.fotos && tarea.fotos.length > 0) {
+        doc.setFontSize(11);
+        doc.text("Fotos:", margin + 10, yPos); yPos += 5;
         
-        indicesTareas.forEach(id => {
-            const tareaData = localStorage.getItem(id);
-            if (tareaData) {
-                tareasValidas.push(id);
-            } else {
-                localStorage.removeItem(id);
+        let imgX = margin + 15;
+        let imgY = yPos;
+        const maxImgWidth = 40;
+        const maxImgHeight = 40;
+        const spacing = 5;
+        
+        tarea.fotos.forEach((foto, idx) => {
+          // Check if we need to move to next row
+          if (imgX + maxImgWidth > doc.internal.pageSize.getWidth() - margin) {
+            imgX = margin + 15;
+            imgY += maxImgHeight + spacing;
+          }
+          
+          // Check if we need a new page
+          if (imgY + maxImgHeight > pageHeight - 20) {
+            doc.addPage();
+            imgY = 20;
+            imgX = margin + 15;
+          }
+          
+          // Add image (try JPEG first, then PNG)
+          try {
+            doc.addImage(foto, "JPEG", imgX, imgY, maxImgWidth, maxImgHeight);
+          } catch (e) {
+            try {
+              doc.addImage(foto, "PNG", imgX, imgY, maxImgWidth, maxImgHeight);
+            } catch (e2) {
+              console.error("Error adding image to PDF:", e2);
             }
+          }
+          
+          imgX += maxImgWidth + spacing;
         });
         
-        localStorage.setItem('indicesTareas', JSON.stringify(tareasValidas));
-    } catch (error) {
-        console.error('Error al limpiar datos antiguos:', error);
-    }
-}
-
-// Agregar al inicio de la aplicación
-document.addEventListener('DOMContentLoaded', () => {
-    limpiarDatosAntiguos();
-    cargarSalas();
-    mostrarTareas();
-    
-    // Configurar validación del input de sala
-    inputSala.addEventListener('input', (e) => {
-        const valor = e.target.value.trim();
-        const nombreValido = /^[a-zA-Z0-9\s._-]{3,50}$/.test(valor);
-        if (!nombreValido) {
-            inputSala.setCustomValidity('El nombre de la sala debe tener entre 3 y 50 caracteres y solo puede contener letras, números, espacios, puntos, guiones y guiones bajos');
-        } else {
-            inputSala.setCustomValidity('');
-        }
+        yPos = imgY + maxImgHeight + 10;
+      } else {
+        yPos += 10;
+      }
     });
-});
+    
+    // Save PDF
+    doc.save("informe-tareas.pdf");
+    mostrarMensaje("PDF generado correctamente", "success");
+  } catch (error) {
+    logError('generarPDF', error);
+    mostrarMensaje("Error al generar el PDF: " + error.message, "danger");
+  }
+}
 
-// Manejar el envío del formulario
-tareaForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    // Obtener valores del formulario
-    const titulo = document.getElementById('titulo').value.trim();
-    const descripcion = document.getElementById('descripcion').value.trim();
-    const fecha = document.getElementById('fecha').value;
-    const horaInicio = document.getElementById('horaInicio').value;
-    const horaFin = document.getElementById('horaFin').value;
-    const prioridad = document.getElementById('prioridad').value;
-    
-    // Validar campos obligatorios
-    if (!titulo || !descripcion || !fecha || !horaInicio || !horaFin || !prioridad) {
-        alert('Por favor, complete todos los campos obligatorios');
-        return;
+/**
+ * Services for handling photos in the task management application
+ */
+
+/**
+ * Maximum size for photos (in bytes) - 5MB
+ */
+const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
+
+/**
+ * Maximum dimension for photos (width or height)
+ */
+const MAX_PHOTO_DIMENSION = 1200;
+
+/**
+ * Process and resize a photo to optimize for storage
+ * @param {File} file - Photo file
+ * @returns {Promise<string>} Base64 encoded photo
+ */
+function processPhoto(file) {
+  return new Promise((resolve, reject) => {
+    // Check file size
+    if (file.size > MAX_PHOTO_SIZE) {
+      reject(new Error(`La imagen es demasiado grande. Máximo: ${MAX_PHOTO_SIZE / (1024 * 1024)}MB`));
+      return;
     }
 
-    // Validar que la fecha no sea anterior a la actual
-    const fechaSeleccionada = new Date(fecha);
-    const fechaActual = new Date();
-    fechaActual.setHours(0, 0, 0, 0);
-    if (fechaSeleccionada < fechaActual) {
-        alert('La fecha no puede ser anterior a la fecha actual');
-        return;
-    }
-    
-    // Validar que la hora de fin sea posterior a la hora de inicio
-    if (horaFin <= horaInicio) {
-        alert('La hora de finalización debe ser posterior a la hora de inicio');
-        return;
-    }
-    
-    try {
-        if (tareaEditandoId) {
-            // Estamos editando un registro existente
-            const tareaExistente = JSON.parse(localStorage.getItem(tareaEditandoId));
-            
-            // Crear nueva versión del registro
-            const tareaActualizada = {
-                id: tareaEditandoId,
-                titulo,
-                descripcion,
-                fecha,
-                horaInicio,
-                horaFin,
-                prioridad,
-                fechaCreacion: tareaExistente.fechaCreacion,
-                fechaModificacion: new Date().toISOString(),
-                version: (tareaExistente.version || 1) + 1
-            };
-            
-            // Guardar la versión actualizada
-            localStorage.setItem(tareaEditandoId, JSON.stringify(tareaActualizada));
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        // Check if resizing is needed
+        if (img.width <= MAX_PHOTO_DIMENSION && img.height <= MAX_PHOTO_DIMENSION) {
+          resolve(event.target.result); // No need to resize, use original
+          return;
+        }
 
-            // Manejar las fotos si existen
-            const fotosInput = document.getElementById('fotos');
-            if (fotosInput.files.length > 0) {
-                const fotos = [];
-                for (let i = 0; i < fotosInput.files.length; i++) {
-                    const file = fotosInput.files[i];
-                    const reader = new FileReader();
-                    reader.onloadend = function() {
-                        fotos.push(reader.result);
-                        if (fotos.length === fotosInput.files.length) {
-                            // Guardar las fotos en el registro
-                            tareaActualizada.fotos = fotos;
-                            localStorage.setItem(tareaEditandoId, JSON.stringify(tareaActualizada));
-                            mostrarTareas();
-                        }
-                    };
-                    reader.readAsDataURL(file);
-                }
-            }
+        // Resize image
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
 
-            mostrarMensaje('Registro actualizado correctamente');
-            
-            // Resetear el modo de edición
-            tareaEditandoId = null;
-            document.querySelector('.btn-primary').textContent = 'Guardar Tarea';
-            
+        // Calculate new dimensions while maintaining aspect ratio
+        if (width > height) {
+          if (width > MAX_PHOTO_DIMENSION) {
+            height = Math.round(height * (MAX_PHOTO_DIMENSION / width));
+            width = MAX_PHOTO_DIMENSION;
+          }
         } else {
-            // Guardar la sala si no existe
-            guardarNuevaSala(titulo);
-            
-            // Crear nuevo registro
-            const nuevoId = `tarea_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            const nuevaTarea = {
-                id: nuevoId,
-                titulo,
-                descripcion,
-                fecha,
-                horaInicio,
-                horaFin,
-                prioridad,
-                fechaCreacion: new Date().toISOString(),
-                version: 1
-            };
-            
-            // Guardar nuevo registro
-            localStorage.setItem(nuevoId, JSON.stringify(nuevaTarea));
-            
-            // Actualizar índice
-            let indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
-            indicesTareas.push(nuevoId);
-            localStorage.setItem('indicesTareas', JSON.stringify(indicesTareas));
-            
-            mostrarMensaje('Nuevo registro guardado');
+          if (height > MAX_PHOTO_DIMENSION) {
+            width = Math.round(width * (MAX_PHOTO_DIMENSION / height));
+            height = MAX_PHOTO_DIMENSION;
+          }
         }
-        
-        // Limpiar formulario y actualizar vista
-        tareaForm.reset();
-        mostrarTareas();
-        
-    } catch (error) {
-        console.error('Error al guardar:', error);
-        mostrarMensaje('Error al procesar el registro');
-    }
-});
 
-// Función para cargar registro en el formulario para edición
-function editarRegistro(tareaId) {
-    const tarea = JSON.parse(localStorage.getItem(tareaId));
-    if (!tarea) {
-        mostrarMensaje('Error al cargar el registro');
-        return;
-    }
-    
-    // Cargar datos en el formulario
-    document.getElementById('titulo').value = tarea.titulo;
-    document.getElementById('descripcion').value = tarea.descripcion;
-    document.getElementById('fecha').value = tarea.fecha;
-    document.getElementById('horaInicio').value = tarea.horaInicio;
-    document.getElementById('horaFin').value = tarea.horaFin;
-    document.getElementById('prioridad').value = tarea.prioridad;
-    
-    // Cambiar a modo edición
-    tareaEditandoId = tareaId;
-    document.querySelector('.btn-primary').textContent = 'Actualizar Registro';
-    
-    // Scroll al formulario
-    document.querySelector('.form-container').scrollIntoView({ behavior: 'smooth' });
-    mostrarMensaje('Editando registro - Realice los cambios necesarios');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Convert to base64 with reduced quality for JPEG
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        resolve(dataUrl);
+      };
+
+      img.onerror = () => {
+        reject(new Error('Error al cargar la imagen'));
+      };
+
+      img.src = event.target.result;
+    };
+
+    reader.onerror = () => {
+      reject(new Error('Error al leer el archivo'));
+    };
+
+    reader.readAsDataURL(file);
+  });
 }
 
-// Función para eliminar registro
-function eliminarRegistro(tareaId, event) {
-    event.stopPropagation();
-    
-    if (confirm('¿Estás seguro de que deseas eliminar este registro?')) {
-        try {
-            // Eliminar registro
-            localStorage.removeItem(tareaId);
-            
-            // Actualizar índice
-            let indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
-            indicesTareas = indicesTareas.filter(id => id !== tareaId);
-            localStorage.setItem('indicesTareas', JSON.stringify(indicesTareas));
-            
-            // Si estábamos editando este registro, resetear el formulario
-            if (tareaEditandoId === tareaId) {
-                tareaEditandoId = null;
-                tareaForm.reset();
-                document.querySelector('.btn-primary').textContent = 'Guardar Tarea';
-            }
-            
-            mostrarMensaje('Registro eliminado correctamente');
-            mostrarTareas();
-        } catch (error) {
-            console.error('Error al eliminar:', error);
-            mostrarMensaje('Error al eliminar el registro');
-        }
-    }
+/**
+ * Process multiple photos and return their base64 representations
+ * @param {FileList} fileList - List of photo files
+ * @returns {Promise<string[]>} Array of base64 encoded photos
+ */
+function processPhotos(fileList) {
+  const files = Array.from(fileList || []);
+  
+  if (files.length === 0) {
+    return Promise.resolve([]);
+  }
+  
+  const photoPromises = files.map(file => {
+    return processPhoto(file).catch(error => {
+      logError('processPhotos', error);
+      mostrarMensaje(`Error al procesar foto: ${error.message}`, 'warning');
+      return null; // Return null for failed photos
+    });
+  });
+  
+  return Promise.all(photoPromises).then(results => {
+    // Filter out null values (failed photos)
+    return results.filter(result => result !== null);
+  });
 }
 
-// Función para mostrar mensaje temporal
-function mostrarMensaje(texto) {
-    const mensaje = document.createElement('div');
-    mensaje.className = 'mensaje-flotante';
-    mensaje.textContent = texto;
-    document.body.appendChild(mensaje);
-    
-    setTimeout(() => {
-        mensaje.remove();
-    }, 2000);
-}
-
-// Función para mostrar/ocultar el historial
-function toggleHistorial() {
-    if (historialContainer.classList.contains('hidden')) {
-        historialContainer.classList.remove('hidden');
-        toggleHistorialBtn.textContent = 'Ocultar Historial';
-        mostrarTareas();
-    } else {
-        historialContainer.classList.add('hidden');
-        toggleHistorialBtn.textContent = 'Mostrar Historial';
-    }
-}
-
-// Evento para el botón de mostrar/ocultar historial
-toggleHistorialBtn.addEventListener('click', toggleHistorial);
-
-// Cargar salas al iniciar la página
-document.addEventListener('DOMContentLoaded', function() {
-    cargarSalas();
-    // Inicializar el historial oculto
-    if (historialContainer) {
-        historialContainer.classList.add('hidden');
-    }
-});
-
-// Función para mostrar tareas
-function mostrarTareas() {
-    historialTareas.innerHTML = '';
-    
+/**
+ * Show preview of selected photos
+ * @param {Event} event - Change event from file input
+ */
+function mostrarPreviewFotos(event) {
+  const fotosPreview = document.getElementById("fotosPreview");
+  fotosPreview.innerHTML = "";
+  
+  const files = event.target.files;
+  if (!files || files.length === 0) return;
+  
+  Array.from(files).forEach(file => {
     try {
-        const indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
-        
-        // Obtener y procesar registros
-        const tareas = indicesTareas
-            .map(id => {
-                const tareaData = localStorage.getItem(id);
-                if (!tareaData) return null;
-                return JSON.parse(tareaData);
-            })
-            .filter(tarea => tarea !== null);
-        
-        // Ordenar por fecha de creación (más recientes primero)
-        tareas.sort((a, b) => new Date(b.fechaCreacion) - new Date(a.fechaCreacion));
-        
-        // Mostrar cada registro
-        tareas.forEach(tarea => {
-            const tareaElement = document.createElement('div');
-            tareaElement.className = `tarea-item prioridad-${tarea.prioridad}`;
-            if (tareaEditandoId === tarea.id) {
-                tareaElement.classList.add('editando');
-            }
-            
-            const fecha = new Date(tarea.fecha).toLocaleDateString();
-            const horaInicio = formatearHora(tarea.horaInicio);
-            const horaFin = formatearHora(tarea.horaFin);
-            
-            let infoVersion = `<p class="version-info">Versión ${tarea.version || 1}`;
-            if (tarea.fechaModificacion) {
-                infoVersion += ` - Última modificación: ${new Date(tarea.fechaModificacion).toLocaleString()}`;
-            }
-            infoVersion += '</p>';
+      // For preview, use FileReader directly without processing
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = document.createElement("img");
+        img.src = e.target.result;
+        img.className = "img-thumbnail me-2";
+        img.style.maxWidth = "100px";
+        fotosPreview.appendChild(img);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      logError('mostrarPreviewFotos', error);
+    }
+  });
+}
 
-            // Agregar sección de fotos si existen
-            let fotosHTML = '';
-            if (tarea.fotos && tarea.fotos.length > 0) {
-                fotosHTML = `
-                    <div class="fotos-container">
-                        <h4>Fotos adjuntas:</h4>
-                        <div class="fotos-grid">
-                            ${tarea.fotos.map((foto, index) => `
-                                <div class="foto-thumbnail" onclick="mostrarFotoModal('${foto}')">
-                                    <img src="${foto}" alt="Foto ${index + 1}">
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                `;
-            }
-            
-            tareaElement.innerHTML = `
-                <div class="tarea-header">
-                    <div class="info-principal">
-                        <h3 class="sala-titulo">Sala: ${tarea.titulo}</h3>
-                        <p class="fecha-registro">Fecha: ${fecha}</p>
-                        <p class="horario-registro">Horario: ${horaInicio} - ${horaFin}</p>
-                        <p class="prioridad-registro">Prioridad: ${tarea.prioridad.charAt(0).toUpperCase() + tarea.prioridad.slice(1)}</p>
-                    </div>
-                    <div class="botones-tarea">
-                        <button class="btn-editar" title="Editar registro">✎</button>
-                        <button class="btn-eliminar" title="Eliminar registro">×</button>
-                    </div>
+/**
+ * Split large base64 strings into smaller chunks for better localStorage handling
+ * @param {string} base64String - Base64 encoded string
+ * @returns {string} The original string (or chunked format for very large strings)
+ */
+function optimizeForStorage(base64String) {
+  // Simple pass-through for now - could implement chunking if needed
+  return base64String;
+}
+
+/**
+ * Services for managing tasks in the application
+ */
+
+// Global variables
+let tareas = [];
+let tareaAEditarId = null;
+let fotosPreviasEdicion = [];
+
+/**
+ * Load tasks from localStorage
+ */
+function cargarTareas() {
+  try {
+    const tareasStr = localStorage.getItem("tareas");
+    tareas = tareasStr ? JSON.parse(tareasStr) : [];
+  } catch (error) {
+    logError('cargarTareas', error);
+    tareas = [];
+    mostrarMensaje("Error al cargar tareas. Se han restablecido.", "warning");
+  }
+}
+
+/**
+ * Save tasks to localStorage
+ */
+function guardarTareasEnStorage() {
+  try {
+    localStorage.setItem("tareas", JSON.stringify(tareas));
+    return true;
+  } catch (error) {
+    logError('guardarTareasEnStorage', error);
+    mostrarMensaje("Error al guardar en almacenamiento local. Posiblemente memoria insuficiente.", "danger");
+    return false;
+  }
+}
+
+/**
+ * Save a task
+ * @param {Event} event - Form submit event
+ */
+async function guardarTarea(event) {
+  event.preventDefault();
+  
+  try {
+    // Get form values
+    const sala = document.getElementById("titulo").value;
+    const prioridad = document.getElementById("prioridad").value;
+    const fecha = document.getElementById("fecha").value;
+    const horaInicio = document.getElementById("horaInicio").value;
+    const horaFin = document.getElementById("horaFin").value;
+    const descripcion = document.getElementById("descripcion").value;
+    const fotosInput = document.getElementById("fotos");
+    
+    // Process new photos
+    const nuevasFotosBase64 = await processPhotos(fotosInput.files);
+    
+    // Combine with previous photos if editing
+    let fotosFinal;
+    if (tareaAEditarId !== null) {
+      fotosFinal = fotosPreviasEdicion.concat(nuevasFotosBase64);
+    } else {
+      fotosFinal = nuevasFotosBase64;
+    }
+    
+    // Create task object
+    const tareaActualizada = {
+      sala, prioridad, fecha, horaInicio, horaFin, descripcion,
+      fotos: fotosFinal
+    };
+    
+    // Save or update
+    if (tareaAEditarId !== null) {
+      const indice = tareas.findIndex(tarea => tarea.id == tareaAEditarId);
+      if (indice !== -1) {
+        tareas[indice] = { id: tareaAEditarId, ...tareaActualizada };
+        mostrarMensaje("Tarea editada correctamente", "success");
+      }
+      tareaAEditarId = null;
+      fotosPreviasEdicion = [];
+      document.querySelector('#tareaForm button[type="submit"]').textContent = "Guardar Tarea";
+    } else {
+      const nuevaTarea = { id: Date.now(), ...tareaActualizada };
+      tareas.push(nuevaTarea);
+      mostrarMensaje("Tarea guardada correctamente", "success");
+    }
+    
+    // Save to localStorage
+    if (guardarTareasEnStorage()) {
+      limpiarFormulario();
+      actualizarHistorial();
+    }
+  } catch (error) {
+    logError('guardarTarea', error);
+    mostrarMensaje("Error al guardar la tarea: " + error.message, "danger");
+  }
+}
+
+/**
+ * Delete a task
+ * @param {string|number} id - Task ID
+ */
+function eliminarRegistro(id) {
+  if (confirm("¿Está seguro de que desea eliminar esta tarea?")) {
+    try {
+      tareas = tareas.filter(tarea => String(tarea.id) !== String(id));
+      if (guardarTareasEnStorage()) {
+        actualizarHistorial();
+        mostrarMensaje("Tarea eliminada correctamente", "success");
+      }
+    } catch (error) {
+      logError('eliminarRegistro', error);
+      mostrarMensaje("Error al eliminar la tarea", "danger");
+    }
+  }
+}
+
+/**
+ * Edit a task
+ * @param {string|number} id - Task ID
+ */
+function editarRegistro(id) {
+  try {
+    const tareaAEditar = tareas.find(tarea => String(tarea.id) === String(id));
+    if (tareaAEditar) {
+      document.getElementById("titulo").value = tareaAEditar.sala;
+      document.getElementById("prioridad").value = tareaAEditar.prioridad;
+      document.getElementById("fecha").value = tareaAEditar.fecha;
+      document.getElementById("horaInicio").value = tareaAEditar.horaInicio;
+      document.getElementById("horaFin").value = tareaAEditar.horaFin;
+      document.getElementById("descripcion").value = tareaAEditar.descripcion;
+      
+      fotosPreviasEdicion = tareaAEditar.fotos ? [...tareaAEditar.fotos] : [];
+      const fotosPreview = document.getElementById("fotosPreview");
+      fotosPreview.innerHTML = "";
+      
+      if (fotosPreviasEdicion.length > 0) {
+        fotosPreviasEdicion.forEach(foto => {
+          const img = document.createElement("img");
+          img.src = foto;
+          img.className = "img-thumbnail me-2";
+          img.style.maxWidth = "100px";
+          fotosPreview.appendChild(img);
+        });
+      }
+      
+      document.getElementById("fotos").value = "";
+      
+      tareaAEditarId = id;
+      document.querySelector('#tareaForm button[type="submit"]').textContent = "Guardar Cambios";
+      
+      const historialContainer = document.getElementById("historialContainer");
+      if (!historialContainer.classList.contains("d-none")) {
+        historialContainer.classList.add("d-none");
+        document.getElementById("toggleHistorial").textContent = "Mostrar Historial";
+      }
+      
+      // Scroll to form
+      document.getElementById("tareaForm").scrollIntoView({ behavior: 'smooth' });
+    }
+  } catch (error) {
+    logError('editarRegistro', error);
+    mostrarMensaje("Error al editar la tarea", "danger");
+  }
+}
+
+/**
+ * Delete selected photos from a task
+ * @param {string|number} tareaId - Task ID
+ * @param {number[]} indicesABorrar - Indices of photos to delete
+ */
+function borrarFotosDeTarea(tareaId, indicesABorrar) {
+  try {
+    const tareaIdx = tareas.findIndex(t => String(t.id) === String(tareaId));
+    if (tareaIdx === -1) return;
+    
+    // Delete photos according to indices (from highest to lowest to avoid reordering)
+    indicesABorrar.sort((a, b) => b - a)
+      .forEach(idx => tareas[tareaIdx].fotos.splice(idx, 1));
+    
+    if (guardarTareasEnStorage()) {
+      mostrarMensaje("Fotos borradas correctamente.", "success");
+      actualizarHistorial();
+    }
+  } catch (error) {
+    logError('borrarFotosDeTarea', error);
+    mostrarMensaje("Error al borrar fotos", "danger");
+  }
+}
+
+/**
+ * Services for UI management in the application
+ */
+
+/**
+ * Toggle history visibility
+ */
+function toggleHistorial() {
+  const historialContainer = document.getElementById("historialContainer");
+  const visible = !historialContainer.classList.contains("d-none");
+  
+  if (visible) {
+    historialContainer.classList.add("d-none");
+    document.getElementById("toggleHistorial").textContent = "Mostrar Historial";
+  } else {
+    historialContainer.classList.remove("d-none");
+    document.getElementById("toggleHistorial").textContent = "Ocultar Historial";
+    actualizarHistorial();
+  }
+}
+
+/**
+ * Clear the task form
+ */
+function limpiarFormulario() {
+  const form = document.getElementById("tareaForm");
+  if (form) form.reset();
+  
+  ["titulo", "prioridad", "fecha", "horaInicio", "horaFin", "descripcion", "fotos"].forEach(id => {
+    let el = document.getElementById(id);
+    if (el) {
+      if (el.tagName === "SELECT") el.selectedIndex = 0;
+      else el.value = "";
+    }
+  });
+  
+  document.getElementById("fotosPreview").innerHTML = "";
+  if (form) form.classList.remove("was-validated");
+  fotosPreviasEdicion = [];
+}
+
+/**
+ * Update the task history view
+ */
+function actualizarHistorial() {
+  const historialTareas = document.getElementById("historialTareas");
+  const salaFiltro = document.getElementById("salaFiltro").value || "";
+  historialTareas.innerHTML = "";
+  
+  try {
+    // Filter and sort tasks
+    const tareasFiltradas = tareas
+      .filter(tarea => !salaFiltro || tarea.sala === salaFiltro)
+      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    
+    // Create task elements
+    tareasFiltradas.forEach(tarea => {
+      const tareaElement = document.createElement("div");
+      tareaElement.className = "list-group-item";
+      
+      // Photos with checkboxes
+      const fotosHTML = (tarea.fotos && tarea.fotos.length > 0) ?
+        `<form onsubmit="return false;" class="form-borrar-fotos" data-tarea-id="${tarea.id}">
+            <div class="fotos-container mt-2 d-flex flex-wrap gap-2">
+              ${tarea.fotos.map((foto, idx) => `
+                <div class="foto-preview position-relative" style="display:inline-block;">
+                  <img src="${foto}" alt="Foto de la tarea" class="img-thumbnail" style="max-width:100px;">
+                  <div style="position:absolute;top:2px;right:2px;">
+                    <input type="checkbox" class="form-check-input borrar-foto-chk" data-foto-idx="${idx}">
+                  </div>
                 </div>
-                <div class="trabajo-contenido">
-                    <p class="trabajo-realizado-label">Trabajo realizado:</p>
-                    <p class="descripcion">${tarea.descripcion}</p>
-                    ${fotosHTML}
-                </div>
-                <p class="registro-info">Registro #${tarea.id}</p>
-                ${infoVersion}
-            `;
-            
-            // Eventos para los botones
-            const btnEditar = tareaElement.querySelector('.btn-editar');
-            btnEditar.addEventListener('click', (e) => {
-                e.stopPropagation();
-                editarRegistro(tarea.id);
-            });
-            
-            const btnEliminar = tareaElement.querySelector('.btn-eliminar');
-            btnEliminar.addEventListener('click', (e) => eliminarRegistro(tarea.id, e));
-            
-            historialTareas.appendChild(tareaElement);
-        });
-    } catch (error) {
-        console.error('Error al mostrar registros:', error);
-        mostrarMensaje('Error al cargar el historial');
-    }
-}
-
-// Función para formatear la hora en formato 24 horas
-function formatearHora(hora24) {
-    if (!hora24) return '';
-    return hora24;
-}
-
-// Función para actualizar el selector de salas en el filtro PDF
-function actualizarSelectorSalasPDF() {
-    const salaFiltro = document.getElementById('salaFiltro');
-    const salasGuardadas = new Set();
-    
-    // Obtener todas las salas únicas del historial
-    const indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
-    indicesTareas.forEach(id => {
-        const tareaData = localStorage.getItem(id);
-        if (tareaData) {
-            const tarea = JSON.parse(tareaData);
-            salasGuardadas.add(tarea.titulo);
-        }
+              `).join("")}
+            </div>
+            <button type="button" class="btn btn-sm btn-danger mt-2 borrar-fotos-btn">Borrar seleccionadas</button>
+        </form>` : "";
+      
+      tareaElement.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+          <h6 class="mb-1">${tarea.sala}</h6>
+          <span class="badge ${getPrioridadBadgeClass(tarea.prioridad)}">${tarea.prioridad}</span>
+        </div>
+        <p class="mb-1"><strong>Fecha:</strong> ${formatDate(tarea.fecha)}</p>
+        <p class="mb-1"><strong>Horario:</strong> ${tarea.horaInicio} - ${tarea.horaFin}</p>
+        <p class="mb-1">${tarea.descripcion}</p>
+        ${fotosHTML}
+        <div class="d-flex justify-content-end gap-2 mt-2">
+          <button class="btn btn-sm btn-primary" onclick="editarRegistro('${tarea.id}')">Editar</button>
+          <button class="btn btn-sm btn-danger" onclick="eliminarRegistro('${tarea.id}')">Eliminar</button>
+        </div>
+      `;
+      
+      historialTareas.appendChild(tareaElement);
     });
     
-    // Limpiar opciones existentes excepto la primera (Todas las salas)
-    while (salaFiltro.options.length > 1) {
-        salaFiltro.remove(1);
-    }
-    
-    // Agregar las salas al selector
-    Array.from(salasGuardadas).sort().forEach(sala => {
-        const option = new Option(sala, sala);
-        salaFiltro.add(option);
+    // Assign listeners to all delete photo forms
+    document.querySelectorAll(".form-borrar-fotos").forEach(form => {
+      form.querySelector(".borrar-fotos-btn").onclick = function() {
+        const tareaId = form.getAttribute("data-tarea-id");
+        const checks = form.querySelectorAll(".borrar-foto-chk");
+        const indicesABorrar = [];
+        
+        checks.forEach((chk) => {
+          if (chk.checked) {
+            const idx = parseInt(chk.getAttribute("data-foto-idx"), 10);
+            if (!isNaN(idx)) {
+              indicesABorrar.push(idx);
+            }
+          }
+        });
+        
+        if (indicesABorrar.length === 0) {
+          mostrarMensaje("Selecciona al menos una foto para borrar.", "warning");
+          return;
+        }
+        
+        if (confirm("¿Seguro que quieres borrar las fotos seleccionadas?")) {
+          borrarFotosDeTarea(tareaId, indicesABorrar);
+        }
+      };
     });
+    
+    // Show message if no tasks
+    if (tareasFiltradas.length === 0) {
+      const emptyMessage = document.createElement("div");
+      emptyMessage.className = "alert alert-info";
+      emptyMessage.textContent = salaFiltro 
+        ? `No hay tareas registradas para la sala "${salaFiltro}".` 
+        : "No hay tareas registradas.";
+      historialTareas.appendChild(emptyMessage);
+    }
+  } catch (error) {
+    logError('actualizarHistorial', error);
+    mostrarMensaje("Error al actualizar el historial", "danger");
+  }
 }
 
-// Función para mostrar el selector de fechas
-function mostrarSelectorFechas() {
-    const fechaFiltroContainer = document.getElementById('fechaFiltroContainer');
-    fechaFiltroContainer.classList.add('visible');
-    actualizarSelectorSalasPDF();
+/**
+ * Initialize the form validation
+ */
+function initFormValidation() {
+  const forms = document.querySelectorAll('.needs-validation');
+  
+  Array.from(forms).forEach(form => {
+    form.addEventListener('submit', event => {
+      if (!form.checkValidity()) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      form.classList.add('was-validated');
+    }, false);
+  });
 }
 
-// Función para formatear fecha como dd/mm/aaaa
-function formatearFecha(fecha) {
-    const [year, month, day] = fecha.split('-');
-    return `${day}/${month}/${year}`;
+/**
+ * Utility functions for the task management application
+ */
+
+/**
+ * Display a message to the user
+ * @param {string} texto - Message text
+ * @param {string} tipo - Message type (success, danger, warning, info)
+ */
+function mostrarMensaje(texto, tipo) {
+  const mensaje = document.getElementById("mensaje");
+  mensaje.textContent = texto;
+  mensaje.className = `alert alert-${tipo}`;
+  mensaje.style.display = "block";
+  setTimeout(() => {
+    mensaje.style.display = "none";
+  }, 3000);
 }
 
-// Función para generar el PDF
-async function generarPDF(fechaInicio, fechaFin, salaSeleccionada) {
-    try {
-        // Obtener tareas del localStorage
-        const indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
-        let tareas = indicesTareas
-            .map(id => {
-                const tareaData = localStorage.getItem(id);
-                if (!tareaData) return null;
-                return JSON.parse(tareaData);
-            })
-            .filter(tarea => {
-                if (!tarea) return false;
-                const fechaTarea = new Date(tarea.fecha);
-                const inicio = new Date(fechaInicio);
-                const fin = new Date(fechaFin);
-                
-                // Filtrar por fecha y sala si está seleccionada
-                const cumpleFecha = fechaTarea >= inicio && fechaTarea <= fin;
-                if (salaSeleccionada) {
-                    return cumpleFecha && tarea.titulo === salaSeleccionada;
-                }
-                return cumpleFecha;
-            });
-
-        // Ordenar por fecha
-        tareas.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
-
-        // Crear el contenido del PDF
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-
-        // Función para agregar el título centrado y subrayado
-        function agregarTituloCentrado(doc, yPos = 20) {
-            doc.setFontSize(16);
-            doc.setFont(undefined, 'bold');
-            const titulo = 'Informe de Partes de Trabajo';
-            const anchoTitulo = doc.getTextWidth(titulo);
-            const xTitulo = (doc.internal.pageSize.width - anchoTitulo) / 2;
-            
-            // Dibujar el título
-            doc.text(titulo, xTitulo, yPos);
-            
-            // Agregar el subrayado
-            doc.setLineWidth(0.5);
-            doc.line(xTitulo, yPos + 1, xTitulo + anchoTitulo, yPos + 1);
-            
-            // Restaurar la fuente normal
-            doc.setFont(undefined, 'normal');
-            
-            return yPos + 10; // Retorna la siguiente posición Y
-        }
-        
-        // Agregar título en la primera página
-        let yPos = agregarTituloCentrado(doc);
-        
-        // Período y sala seleccionada
-        doc.setFontSize(12);
-        const fechaInicioFormateada = formatearFecha(fechaInicio);
-        const fechaFinFormateada = formatearFecha(fechaFin);
-        doc.text(`Período: ${fechaInicioFormateada} al ${fechaFinFormateada}`, 20, yPos + 10);
-        
-        if (salaSeleccionada) {
-            doc.text(`Sala: ${salaSeleccionada}`, 20, yPos + 17);
-            yPos = yPos + 27;
-        } else {
-            doc.text('Todas las salas', 20, yPos + 17);
-            yPos = yPos + 27;
-        }
-        
-        // Agregar cada tarea al PDF
-        tareas.forEach(tarea => {
-            // Si no hay espacio suficiente en la página actual, crear una nueva
-            if (yPos > 250) {
-                doc.addPage();
-                // Agregar título en la nueva página
-                yPos = agregarTituloCentrado(doc);
-            }
-            
-            // Escribir "Sala:" y el nombre de la sala en negrita y subrayado
-            doc.setFontSize(12);
-            doc.setFont(undefined, 'bold');
-            const textoCompletoSala = `Sala: ${tarea.titulo}`;
-            doc.text(textoCompletoSala, 20, yPos);
-            
-            // Calcular ancho del texto completo para el subrayado
-            const anchoTextoCompleto = doc.getTextWidth(textoCompletoSala);
-            doc.setLineWidth(0.5);
-            doc.line(20, yPos + 1, 20 + anchoTextoCompleto, yPos + 1);
-            yPos += 7;
-            
-            // Volver a fuente normal para el resto del contenido
-            doc.setFont(undefined, 'normal');
-            doc.setFontSize(10);
-            
-            const fechaTareaFormateada = formatearFecha(tarea.fecha);
-            doc.text(`Fecha: ${fechaTareaFormateada}`, 20, yPos);
-            yPos += 5;
-            
-            doc.text(`Horario: ${tarea.horaInicio} - ${tarea.horaFin}`, 20, yPos);
-            yPos += 5;
-            
-            doc.text(`Prioridad: ${tarea.prioridad}`, 20, yPos);
-            yPos += 7;
-            
-            // Escribir "Trabajo realizado:" en negrita y subrayado
-            doc.setFont(undefined, 'bold');
-            const textoTrabajo = 'Trabajo realizado:';
-            doc.text(textoTrabajo, 20, yPos);
-            
-            const anchoTrabajo = doc.getTextWidth(textoTrabajo);
-            doc.setLineWidth(0.5);
-            doc.line(20, yPos + 1, 20 + anchoTrabajo, yPos + 1);
-            yPos += 5;
-            
-            doc.setFont(undefined, 'normal');
-            const descripcionLineas = doc.splitTextToSize(tarea.descripcion, 170);
-            doc.text(descripcionLineas, 20, yPos);
-            yPos += (descripcionLineas.length * 5) + 10;
-            
-            doc.setLineWidth(0.2);
-            doc.line(20, yPos - 5, 190, yPos - 5);
-            yPos += 10;
-        });
-        
-        // Nombre del archivo con la sala si está seleccionada
-        let nombreArchivo = `informe_tareas_${fechaInicioFormateada}_${fechaFinFormateada}`;
-        if (salaSeleccionada) {
-            nombreArchivo += `_${salaSeleccionada.replace(/[^a-z0-9]/gi, '_')}`;
-        }
-        doc.save(`${nombreArchivo}.pdf`);
-        
-        document.getElementById('fechaFiltroContainer').classList.remove('visible');
-        mostrarMensaje('PDF generado correctamente');
-        
-    } catch (error) {
-        console.error('Error al generar PDF:', error);
-        mostrarMensaje('Error al generar el PDF');
-    }
+/**
+ * Get the appropriate Bootstrap badge class for a priority level
+ * @param {string} prioridad - Priority level
+ * @returns {string} CSS class name
+ */
+function getPrioridadBadgeClass(prioridad) {
+  switch ((prioridad || "").toLowerCase()) {
+    case "alta": return "bg-danger";
+    case "media": return "bg-warning";
+    case "baja": return "bg-success";
+    default: return "bg-secondary";
+  }
 }
 
-// Evento para generar el PDF cuando se confirman las fechas
-document.getElementById('generarPDFBtn').addEventListener('click', () => {
-    const fechaInicio = document.getElementById('fechaInicio').value;
-    const fechaFin = document.getElementById('fechaFin').value;
-    const salaSeleccionada = document.getElementById('salaFiltro').value;
-    
-    if (!fechaInicio || !fechaFin) {
-        mostrarMensaje('Por favor, seleccione ambas fechas');
-        return;
-    }
-    
-    if (fechaFin < fechaInicio) {
-        mostrarMensaje('La fecha final debe ser posterior a la fecha inicial');
-        return;
-    }
-    
-    generarPDF(fechaInicio, fechaFin, salaSeleccionada);
-});
-
-// Evento para mostrar el selector de fechas
-document.getElementById('mostrarPDFBtn').addEventListener('click', mostrarSelectorFechas);
-
-// Evento para cerrar el selector de fechas
-document.getElementById('cerrarFiltroBtn').addEventListener('click', () => {
-    document.getElementById('fechaFiltroContainer').classList.remove('visible');
-});
-
-// Función para validar campos del formulario
-function validarFormulario() {
-    const titulo = document.getElementById('titulo').value.trim();
-    const descripcion = document.getElementById('descripcion').value.trim();
-    const fecha = document.getElementById('fecha').value;
-    const horaInicio = document.getElementById('horaInicio').value;
-    const horaFin = document.getElementById('horaFin').value;
-    
-    // Validar campos obligatorios
-    if (!titulo || !descripcion || !fecha || !horaInicio || !horaFin) {
-        mostrarMensaje('Por favor, complete todos los campos obligatorios', 'error');
-        return false;
-    }
-
-    // Validar longitud de la descripción
-    if (descripcion.length > 500) {
-        mostrarMensaje('La descripción no puede exceder los 500 caracteres', 'error');
-        return false;
-    }
-
-    // Validar fecha (no permitir fechas futuras)
-    const fechaSeleccionada = new Date(fecha);
-    const fechaActual = new Date();
-    fechaActual.setHours(0, 0, 0, 0);
-    if (fechaSeleccionada > fechaActual) {
-        mostrarMensaje('No se pueden registrar tareas con fecha futura', 'error');
-        return false;
-    }
-
-    // Validar horas
-    if (horaFin <= horaInicio) {
-        mostrarMensaje('La hora de finalización debe ser posterior a la hora de inicio', 'error');
-        return false;
-    }
-
-    return true;
+/**
+ * Format a date string to local date format
+ * @param {string} dateString - Date string
+ * @returns {string} Formatted date
+ */
+function formatDate(dateString) {
+  try {
+    return new Date(dateString).toLocaleDateString();
+  } catch (e) {
+    console.error("Error formatting date:", e);
+    return dateString;
+  }
 }
 
-// Función mejorada para mostrar mensajes
-function mostrarMensaje(texto, tipo = 'info') {
-    const mensaje = document.createElement('div');
-    mensaje.className = `mensaje-flotante mensaje-${tipo}`;
-    mensaje.textContent = texto;
-    mensaje.setAttribute('role', 'alert');
-    document.body.appendChild(mensaje);
-    
-    setTimeout(() => {
-        mensaje.classList.add('ocultar');
-        setTimeout(() => mensaje.remove(), 300);
-    }, 3000);
+/**
+ * Check if the device is a mobile device
+ * @returns {boolean} True if mobile device
+ */
+function isMobileDevice() {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
-// Función para manejar el respaldo de datos
-function exportarRespaldo() {
-    try {
-        const datos = {
-            salas: JSON.parse(localStorage.getItem('salas')) || [],
-            indicesTareas: JSON.parse(localStorage.getItem('indicesTareas')) || [],
-            tareas: {}
-        };
-
-        // Obtener todas las tareas
-        datos.indicesTareas.forEach(id => {
-            const tarea = localStorage.getItem(id);
-            if (tarea) {
-                datos.tareas[id] = JSON.parse(tarea);
-            }
-        });
-
-        // Crear y descargar el archivo
-        const blob = new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `respaldo_tareas_${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        mostrarMensaje('Respaldo exportado correctamente', 'success');
-    } catch (error) {
-        console.error('Error al exportar respaldo:', error);
-        mostrarMensaje('Error al exportar el respaldo', 'error');
-    }
+/**
+ * Log errors for debugging
+ * @param {string} context - Context where error occurred
+ * @param {Error} error - Error object
+ */
+function logError(context, error) {
+  console.error(`[${context}] Error:`, error);
+  
+  // On mobile devices, show error in UI for better debugging
+  if (isMobileDevice()) {
+    mostrarMensaje(`Error en ${context}: ${error.message}`, "danger");
+  }
 }
-
-// Función para importar respaldo
-async function importarRespaldo(archivo) {
-    try {
-        const texto = await archivo.text();
-        const datos = JSON.parse(texto);
-
-        // Validar estructura del archivo
-        if (!datos.salas || !datos.indicesTareas || !datos.tareas) {
-            throw new Error('Formato de archivo inválido');
-        }
-
-        // Importar datos
-        localStorage.setItem('salas', JSON.stringify(datos.salas));
-        localStorage.setItem('indicesTareas', JSON.stringify(datos.indicesTareas));
-        
-        Object.entries(datos.tareas).forEach(([id, tarea]) => {
-            localStorage.setItem(id, JSON.stringify(tarea));
-        });
-
-        mostrarMensaje('Respaldo importado correctamente', 'success');
-        cargarSalas();
-        mostrarTareas();
-    } catch (error) {
-        console.error('Error al importar respaldo:', error);
-        mostrarMensaje('Error al importar el respaldo', 'error');
-    }
-}
-
-// Evento para el botón de exportar respaldo
-document.getElementById('exportarRespaldo').addEventListener('click', exportarRespaldo);
-
-// Evento para el botón de importar respaldo
-document.getElementById('importarRespaldo').addEventListener('click', () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = (e) => {
-        const archivo = e.target.files[0];
-        if (archivo) {
-            importarRespaldo(archivo);
-        }
-    };
-    input.click();
-});
-
-// Función para limpiar datos antiguos
-function limpiarDatosAntiguos() {
-    try {
-        const indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
-        const tareasValidas = indicesTareas.filter(id => {
-            const tarea = localStorage.getItem(id);
-            if (!tarea) {
-                localStorage.removeItem(id);
-                return false;
-            }
-            return true;
-        });
-        
-        localStorage.setItem('indicesTareas', JSON.stringify(tareasValidas));
-    } catch (error) {
-        console.error('Error al limpiar datos antiguos:', error);
-    }
-}
-
-// Modificar el evento submit del formulario
-tareaForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    if (!validarFormulario()) {
-        return;
-    }
-    
-    // ... existing code ...
-});
-// Función para alternar la visibilidad del historial
-function toggleHistorial() {
-    const historialContainer = document.getElementById('historialContainer');
-    const toggleHistorialBtn = document.getElementById('toggleHistorial');
-    
-    if (historialContainer.classList.contains('hidden')) {
-        historialContainer.classList.remove('hidden');
-        toggleHistorialBtn.textContent = 'Ocultar Historial';
-    } else {
-        historialContainer.classList.add('hidden');
-        toggleHistorialBtn.textContent = 'Mostrar Historial';
-    }
-}
-
-// Agregar el evento click al botón
-document.getElementById('toggleHistorial').addEventListener('click', toggleHistorial);
-
-document.getElementById('generarPDF').addEventListener('click', function() {
-    // Mostrar el diálogo de selección de fechas para el PDF
-    const fechaFiltroContainer = document.getElementById('fechaFiltroContainer');
-    if (fechaFiltroContainer) {
-        fechaFiltroContainer.classList.add('visible');
-    }
-});
-
-// Evento para mostrar el selector de fechas
-document.getElementById('mostrarPDFBtn').addEventListener('click', mostrarSelectorFechas);
-
-// Evento para cerrar el selector de fechas
-document.getElementById('cerrarFiltroBtn').addEventListener('click', () => {
-    document.getElementById('fechaFiltroContainer').classList.remove('visible');
-});
-
-// Función para validar campos del formulario
-function validarFormulario() {
-    const titulo = document.getElementById('titulo').value.trim();
-    const descripcion = document.getElementById('descripcion').value.trim();
-    const fecha = document.getElementById('fecha').value;
-    const horaInicio = document.getElementById('horaInicio').value;
-    const horaFin = document.getElementById('horaFin').value;
-    
-    // Validar campos obligatorios
-    if (!titulo || !descripcion || !fecha || !horaInicio || !horaFin) {
-        mostrarMensaje('Por favor, complete todos los campos obligatorios', 'error');
-        return false;
-    }
-
-    // Validar longitud de la descripción
-    if (descripcion.length > 500) {
-        mostrarMensaje('La descripción no puede exceder los 500 caracteres', 'error');
-        return false;
-    }
-
-    // Validar fecha (no permitir fechas futuras)
-    const fechaSeleccionada = new Date(fecha);
-    const fechaActual = new Date();
-    fechaActual.setHours(0, 0, 0, 0);
-    if (fechaSeleccionada > fechaActual) {
-        mostrarMensaje('No se pueden registrar tareas con fecha futura', 'error');
-        return false;
-    }
-
-    // Validar horas
-    if (horaFin <= horaInicio) {
-        mostrarMensaje('La hora de finalización debe ser posterior a la hora de inicio', 'error');
-        return false;
-    }
-
-    return true;
-}
-
-// Función mejorada para mostrar mensajes
-function mostrarMensaje(texto, tipo = 'info') {
-    const mensaje = document.createElement('div');
-    mensaje.className = `mensaje-flotante mensaje-${tipo}`;
-    mensaje.textContent = texto;
-    mensaje.setAttribute('role', 'alert');
-    document.body.appendChild(mensaje);
-    
-    setTimeout(() => {
-        mensaje.classList.add('ocultar');
-        setTimeout(() => mensaje.remove(), 300);
-    }, 3000);
-}
-
-// Función para manejar el respaldo de datos
-function exportarRespaldo() {
-    try {
-        const datos = {
-            salas: JSON.parse(localStorage.getItem('salas')) || [],
-            indicesTareas: JSON.parse(localStorage.getItem('indicesTareas')) || [],
-            tareas: {}
-        };
-
-        // Obtener todas las tareas
-        datos.indicesTareas.forEach(id => {
-            const tarea = localStorage.getItem(id);
-            if (tarea) {
-                datos.tareas[id] = JSON.parse(tarea);
-            }
-        });
-
-        // Crear y descargar el archivo
-        const blob = new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `respaldo_tareas_${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        mostrarMensaje('Respaldo exportado correctamente', 'success');
-    } catch (error) {
-        console.error('Error al exportar respaldo:', error);
-        mostrarMensaje('Error al exportar el respaldo', 'error');
-    }
-}
-
-// Función para importar respaldo
-async function importarRespaldo(archivo) {
-    try {
-        const texto = await archivo.text();
-        const datos = JSON.parse(texto);
-
-        // Validar estructura del archivo
-        if (!datos.salas || !datos.indicesTareas || !datos.tareas) {
-            throw new Error('Formato de archivo inválido');
-        }
-
-        // Importar datos
-        localStorage.setItem('salas', JSON.stringify(datos.salas));
-        localStorage.setItem('indicesTareas', JSON.stringify(datos.indicesTareas));
-        
-        Object.entries(datos.tareas).forEach(([id, tarea]) => {
-            localStorage.setItem(id, JSON.stringify(tarea));
-        });
-
-        mostrarMensaje('Respaldo importado correctamente', 'success');
-        cargarSalas();
-        mostrarTareas();
-    } catch (error) {
-        console.error('Error al importar respaldo:', error);
-        mostrarMensaje('Error al importar el respaldo', 'error');
-    }
-}
-
-// Evento para el botón de exportar respaldo
-document.getElementById('exportarRespaldo').addEventListener('click', exportarRespaldo);
-
-// Evento para el botón de importar respaldo
-document.getElementById('importarRespaldo').addEventListener('click', () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = (e) => {
-        const archivo = e.target.files[0];
-        if (archivo) {
-            importarRespaldo(archivo);
-        }
-    };
-    input.click();
-});
-
-// Función para limpiar datos antiguos
-function limpiarDatosAntiguos() {
-    try {
-        const indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
-        const tareasValidas = indicesTareas.filter(id => {
-            const tarea = localStorage.getItem(id);
-            if (!tarea) {
-                localStorage.removeItem(id);
-                return false;
-            }
-            return true;
-        });
-        
-        localStorage.setItem('indicesTareas', JSON.stringify(tareasValidas));
-    } catch (error) {
-        console.error('Error al limpiar datos antiguos:', error);
-    }
-}
-
-// Modificar el evento submit del formulario
-tareaForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    if (!validarFormulario()) {
-        return;
-    }
-    
-    // ... existing code ...
-// Función para alternar la visibilidad del historial
-function toggleHistorial() {
-    const historialContainer = document.getElementById('historialContainer');
-    const toggleHistorialBtn = document.getElementById('toggleHistorial');
-    
-    if (historialContainer.classList.contains('hidden')) {
-        historialContainer.classList.remove('hidden');
-        toggleHistorialBtn.textContent = 'Ocultar Historial';
-    } else {
-        historialContainer.classList.add('hidden');
-        toggleHistorialBtn.textContent = 'Mostrar Historial';
-    }
-}
-
-// Agregar el evento click al botón
-document.getElementById('toggleHistorial').addEventListener('click', toggleHistorial);
-
-document.getElementById('generarPDF').addEventListener('click', function() {
-    // Mostrar el diálogo de selección de fechas para el PDF
-    const fechaFiltroContainer = document.getElementById('fechaFiltroContainer');
-    if (fechaFiltroContainer) {
-        fechaFiltroContainer.classList.add('visible');
-    }
-});
-
-// Evento para mostrar el selector de fechas
-document.getElementById('mostrarPDFBtn').addEventListener('click', mostrarSelectorFechas);
-
-// Evento para cerrar el selector de fechas
-document.getElementById('cerrarFiltroBtn').addEventListener('click', () => {
-    document.getElementById('fechaFiltroContainer').classList.remove('visible');
-});
-
-// Función para validar campos del formulario
-function validarFormulario() {
-    const titulo = document.getElementById('titulo').value.trim();
-    const descripcion = document.getElementById('descripcion').value.trim();
-    const fecha = document.getElementById('fecha').value;
-    const horaInicio = document.getElementById('horaInicio').value;
-    const horaFin = document.getElementById('horaFin').value;
-    
-    // Validar campos obligatorios
-    if (!titulo || !descripcion || !fecha || !horaInicio || !horaFin) {
-        mostrarMensaje('Por favor, complete todos los campos obligatorios', 'error');
-        return false;
-    }
-
-    // Validar longitud de la descripción
-    if (descripcion.length > 500) {
-        mostrarMensaje('La descripción no puede exceder los 500 caracteres', 'error');
-        return false;
-    }
-
-    // Validar fecha (no permitir fechas futuras)
-    const fechaSeleccionada = new Date(fecha);
-    const fechaActual = new Date();
-    fechaActual.setHours(0, 0, 0, 0);
-    if (fechaSeleccionada > fechaActual) {
-        mostrarMensaje('No se pueden registrar tareas con fecha futura', 'error');
-        return false;
-    }
-
-    // Validar horas
-    if (horaFin <= horaInicio) {
-        mostrarMensaje('La hora de finalización debe ser posterior a la hora de inicio', 'error');
-        return false;
-    }
-
-    return true;
-}
-
-// Función mejorada para mostrar mensajes
-function mostrarMensaje(texto, tipo = 'info') {
-    const mensaje = document.createElement('div');
-    mensaje.className = `mensaje-flotante mensaje-${tipo}`;
-    mensaje.textContent = texto;
-    mensaje.setAttribute('role', 'alert');
-    document.body.appendChild(mensaje);
-    
-    setTimeout(() => {
-        mensaje.classList.add('ocultar');
-        setTimeout(() => mensaje.remove(), 300);
-    }, 3000);
-}
-
-// Función para manejar el respaldo de datos
-function exportarRespaldo() {
-    try {
-        const datos = {
-            salas: JSON.parse(localStorage.getItem('salas')) || [],
-            indicesTareas: JSON.parse(localStorage.getItem('indicesTareas')) || [],
-            tareas: {}
-        };
-
-        // Obtener todas las tareas
-        datos.indicesTareas.forEach(id => {
-            const tarea = localStorage.getItem(id);
-            if (tarea) {
-                datos.tareas[id] = JSON.parse(tarea);
-            }
-        });
-
-        // Crear y descargar el archivo
-        const blob = new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `respaldo_tareas_${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        mostrarMensaje('Respaldo exportado correctamente', 'success');
-    } catch (error) {
-        console.error('Error al exportar respaldo:', error);
-        mostrarMensaje('Error al exportar el respaldo', 'error');
-    }
-}
-
-// Función para importar respaldo
-async function importarRespaldo(archivo) {
-    try {
-        const texto = await archivo.text();
-        const datos = JSON.parse(texto);
-
-        // Validar estructura del archivo
-        if (!datos.salas || !datos.indicesTareas || !datos.tareas) {
-            throw new Error('Formato de archivo inválido');
-        }
-
-        // Importar datos
-        localStorage.setItem('salas', JSON.stringify(datos.salas));
-        localStorage.setItem('indicesTareas', JSON.stringify(datos.indicesTareas));
-        
-        Object.entries(datos.tareas).forEach(([id, tarea]) => {
-            localStorage.setItem(id, JSON.stringify(tarea));
-        });
-
-        mostrarMensaje('Respaldo importado correctamente', 'success');
-        cargarSalas();
-        mostrarTareas();
-    } catch (error) {
-        console.error('Error al importar respaldo:', error);
-        mostrarMensaje('Error al importar el respaldo', 'error');
-    }
-}
-
-// Evento para el botón de exportar respaldo
-document.getElementById('exportarRespaldo').addEventListener('click', exportarRespaldo);
-
-// Evento para el botón de importar respaldo
-document.getElementById('importarRespaldo').addEventListener('click', () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = (e) => {
-        const archivo = e.target.files[0];
-        if (archivo) {
-            importarRespaldo(archivo);
-        }
-    };
-    input.click();
-});
-
-// Función para limpiar datos antiguos
-function limpiarDatosAntiguos() {
-    try {
-        const indicesTareas = JSON.parse(localStorage.getItem('indicesTareas')) || [];
-        const tareasValidas = indicesTareas.filter(id => {
-            const tarea = localStorage.getItem(id);
-            if (!tarea) {
-                localStorage.removeItem(id);
-                return false;
-            }
-            return true;
-        });
-        
-        localStorage.setItem('indicesTareas', JSON.stringify(tareasValidas));
-    } catch (error) {
-        console.error('Error al limpiar datos antiguos:', error);
-    }
-}
-
-// Modificar el evento submit del formulario
-tareaForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    if (!validarFormulario()) {
-        return;
-    }
-    
-    // ... existing code ...
-document.getElementById('descripcion').addEventListener('input', function() {
-    const maxLength = 500;
-    const contador = document.getElementById('descripcion-contador');
-    const caracteresActuales = this.value.length;
-    
-    contador.textContent = `${caracteresActuales}/${maxLength}`;
-    
-    if (caracteresActuales > maxLength) {
-        contador.classList.add('excedido');
-        this.classList.add('error');
-    } else {
-        contador.classList.remove('excedido');
-        this.classList.remove('error');
-    }
-});
-
-// Inicialización mejorada
-document.addEventListener('DOMContentLoaded', () => {
-    limpiarDatosAntiguos();
-    cargarSalas();
-    mostrarTareas();
-    
-    // Establecer fecha máxima como hoy
-    const inputFecha = document.getElementById('fecha');
-    const hoy = new Date().toISOString().split('T')[0];
-    inputFecha.max = hoy;
-    
-    // Configurar validación del input de sala
-    inputSala.addEventListener('input', (e) => {
-        const valor = e.target.value.trim();
-        const nombreValido = /^[a-zA-Z0-9\s._-]{3,50}$/.test(valor);
-        if (!nombreValido) {
-            inputSala.setCustomValidity('El nombre de la sala debe tener entre 3 y 50 caracteres y solo puede contener letras, números, espacios, puntos, guiones y guiones bajos');
-        } else {
-            inputSala.setCustomValidity('');
-        }
-    });
-});
